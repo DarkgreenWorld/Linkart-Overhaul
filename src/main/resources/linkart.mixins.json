@@ -1,14 +1,14 @@
 {
   "required": true,
   "minVersion": "0.8",
-  "package": "com.github.vini2003.linkart.mixin",
-  "compatibilityLevel": "${java}",
+  "package": "com.darkgreen_world.linkart.mixin",
+  "compatibilityLevel": "${JAVA}",
   "mixins": [
     "AbstractMinecartEntityMixin",
     "EntityMixin",
     "MinecartAccessor",
-    "PersistentStateAccessor",
-    "PlayerEntityMixin"
+    "PlayerEntityMixin",
+    "ServerLevelMixin"
   ],
   "injectors": {
     "defaultRequire": 1

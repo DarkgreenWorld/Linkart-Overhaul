@@ -1,8 +1,8 @@
-package com.github.vini2003.linkart.utility;
+package com.darkgreen_world.linkart.utility;
 
-import com.github.vini2003.linkart.configuration.LinkartConfiguration;
+import com.darkgreen_world.linkart.configuration.LinkartConfiguration;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.vehicle.AbstractMinecart;
+import net.minecraft.world.entity.vehicle.minecart.AbstractMinecart;
 
 public class CollisionUtils {
     public static boolean shouldCollide(Entity source, Entity target) {

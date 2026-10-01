@@ -1,10 +1,11 @@
 {
   "schemaVersion": 1,
-  "id": "${id}",
+  "id": "linkart",
   "version": "${version}",
   "name": "${name}",
   "description": "Link together minecarts with ease!",
   "authors": [
+	"Darkgreen_World",
     "vini2003",
     "Martmists",
     "melontini",
@@ -15,14 +16,14 @@
     "rosellle"
   ],
   "contact": {
-    "sources": "https://github.com/melontini/Linkart"
+    "sources": "https://github.com/darkgreenworld/Linkart"
   },
   "license": "MIT",
   "icon": "assets/linkart/icon.png",
   "environment": "*",
   "entrypoints": {
     "main": [
-      "com.github.vini2003.linkart.Linkart"
+      "com.darkgreen_world.linkart.Linkart"
     ]
   },
   "mixins": [
@@ -31,15 +32,15 @@
   "depends": {
     "fabricloader": ">=${loader_version}",
     "fabric-api": "*",
-    "minecraft": "${minecraft}"
+    "minecraft": "${minecraft_version}"
   },
   "custom": {
     "loom:injected_interfaces": {
       "net/minecraft/class_1688": [
-        "com/github/vini2003/linkart/api/LinkableMinecart"
+        "com/darkgreen_world/linkart/api/LinkableMinecart"
       ],
       "net/minecraft/world/entity/vehicle/minecart/AbstractMinecart": [
-        "com/github/vini2003/linkart/api/LinkableMinecart"
+        "com/darkgreen_world/linkart/api/LinkableMinecart"
       ]
     }
   }

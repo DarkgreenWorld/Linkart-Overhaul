@@ -1,0 +1,72 @@
+plugins {
+    id "com.modrinth.minotaur" version "2.+"
+    id 'net.fabricmc.fabric-loom' version "${loom_version}"
+}
+
+var min_minecraft_version = project.minecraft_versions.split(',').first()
+var last_minecraft_version = project.minecraft_versions.split(',').last()
+var mc_version = min_minecraft_version == last_minecraft_version
+        ? min_minecraft_version
+        : "${min_minecraft_version}-${last_minecraft_version}"
+version = "${project.mod_version}+${mc_version}"
+group = project.maven_group
+
+base {
+    archivesName = project.mod_name
+}
+
+repositories {
+    maven{
+        name = "Modrinth"
+        url ="https://api.modrinth.com/maven"
+    }
+    maven {
+        name = "MidnightDust"
+        url = "https://maven.midnightdust.eu/releases"
+    }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+}
+
+processResources {
+    inputs.property "version", project.version
+    inputs.property "minecraft_version", project.minecraft_version
+    inputs.property "loader_version", project.loader_version
+    inputs.property "java_version", project.java_version
+    filteringCharset "UTF-8"
+
+    filesMatching("fabric.mod.json") {
+        expand "version": project.version,
+                "minecraft_version": project.minecraft_version,
+                "loader_version": project.loader_version,
+                "name": project.mod_name
+    }
+
+    filesMatching("linkart.mixins.json") {
+        expand "JAVA": "JAVA_" + project.java_version
+    }
+}
+
+def targetJavaVersion = 25
+tasks.withType(JavaCompile).configureEach {
+    it.options.encoding = "UTF-8"
+    it.options.release.set(targetJavaVersion)
+}
+
+java {
+    def javaVersion = JavaVersion.toVersion(targetJavaVersion)
+    if (JavaVersion.current() < javaVersion) {
+        toolchain.languageVersion = JavaLanguageVersion.of(targetJavaVersion)
+    }
+    withSourcesJar()
+}
+
+jar {
+    from("LICENSE") {
+        rename { "${it}_${mod_name}" }
+    }
+}

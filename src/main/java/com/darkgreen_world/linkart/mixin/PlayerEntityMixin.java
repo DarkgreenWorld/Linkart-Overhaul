@@ -1,7 +1,7 @@
-package com.github.vini2003.linkart.mixin;
+package com.darkgreen_world.linkart.mixin;
 
-import com.github.vini2003.linkart.Linkart;
-import com.github.vini2003.linkart.utility.CartOperation;
+import com.darkgreen_world.linkart.Linkart;
+import com.darkgreen_world.linkart.utility.CartOperation;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
@@ -10,7 +10,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.entity.vehicle.AbstractMinecart;
+import net.minecraft.world.entity.vehicle.minecart.AbstractMinecart;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
@@ -31,9 +31,9 @@ public abstract class PlayerEntityMixin extends LivingEntity {
 
     @Inject(at = @At("HEAD"), method = "interactOn", cancellable = true)
     //? if <26.1 {
-    void onInteract(Entity entity, InteractionHand hand, CallbackInfoReturnable<InteractionResult> cir) {
+    //void onInteract(Entity entity, InteractionHand hand, CallbackInfoReturnable<InteractionResult> cir) {
     //? } else
-    //void onInteract(Entity entity, InteractionHand hand, Vec3 location, CallbackInfoReturnable<InteractionResult> cir) {
+    void onInteract(Entity entity, InteractionHand hand, Vec3 location, CallbackInfoReturnable<InteractionResult> cir) {
         if (entity instanceof AbstractMinecart minecart) {
             if(level().isClientSide()) return;
 
@@ -41,22 +41,19 @@ public abstract class PlayerEntityMixin extends LivingEntity {
             ItemStack stack = player.getItemInHand(hand);
 
             if (!stack.is(Linkart.LINKERS)) return;
+            // Without sneaking, a click on a cart is what it always was: getting in, opening its chest
+            if (!player.isShiftKeyDown()) return;
 
             if (this.operation != null) {
                 if (this.operation.minecart() != null && this.operation.minecart() != minecart &&
                         minecart.isAlive() && this.operation.minecart().isAlive()) {
-                    var result = this.operation.type().perform(minecart, this.operation, stack);
-                    if (result.consumesAction() && !player.isCreative()) stack.shrink(1);
-                    finishOperation(cir, minecart, result);
+                    finishOperation(cir, minecart, this.operation.perform(minecart, player, stack));
                 } else {
                     finishOperation(cir, minecart, InteractionResult.FAIL);
                 }
                 this.operation = null;
-            } else if (minecart.linkart$getFollower() != null) {
-                this.operation = new CartOperation(CartOperation.Type.UNLINKING, minecart);
-                finishOperation(cir, minecart, InteractionResult.SUCCESS);
             } else {
-                this.operation = new CartOperation(CartOperation.Type.LINKING, minecart);
+                this.operation = new CartOperation(minecart);
                 finishOperation(cir, minecart, InteractionResult.SUCCESS);
             }
         }
