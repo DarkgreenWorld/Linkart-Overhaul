@@ -29,7 +29,7 @@ public abstract class EntityMixin {
     @Inject(at = @At("HEAD"), method = "collide(Lnet/minecraft/world/phys/Vec3;)Lnet/minecraft/world/phys/Vec3;", cancellable = true)
     void linkart$onRecalculateVelocity(Vec3 movement, CallbackInfoReturnable<Vec3> cir) {
         if ((Object) this instanceof AbstractMinecart minecart) {
-            // Every move goes through here, one per stretch of rail
+            // Path waypoint, one per move
             if (!minecart.level().isClientSide()) minecart.linkart$getMotion().mark(minecart.position());
 
             List<Entity> collisions = minecart.level().getEntities((Entity) (Object) this, minecart.getBoundingBox().expandTowards(movement));

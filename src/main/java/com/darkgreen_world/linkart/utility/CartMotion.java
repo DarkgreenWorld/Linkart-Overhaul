@@ -5,26 +5,26 @@ import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * A linked cart's part in its train: what {@link CartUtils#plan} decided for it this tick, and what it then did, measured
- * along the track rather than in a straight line so the cart behind it can cover the same ground. Speeds and
- * distances are horizontal, which is what minecart physics spends its speed on, and signed: positive is towards the
- * first cart of the chain, negative is towards the last.
+ * Per-tick state of a linked cart. Speeds and distances are horizontal and signed: positive is towards the first
+ * cart of the chain.
  */
 public class CartMotion {
 
     public enum Mode {
-        /** Left to its own velocity. Its speed is the train's as far as this cart is concerned. */
+        /** Runs on its own velocity. */
         FREE,
-        /** Given a speed. Whatever its rail, its rider and the rest of vanilla add to or take from it, the train gets. */
+        /** Given a speed. What vanilla makes of it counts towards the train's. */
         DRIVEN,
-        /** Only kept in its place behind the cart ahead. Nothing it does says anything about the train. */
+        /** Only kept in place. Doesn't count towards the train's speed. */
         SLAVED
     }
 
-    // Shorter moves are left to add up, so that a cart being nudged onto its rail doesn't pass for a heading
+    // Shorter moves add up rather than set a direction
     private static final double MIN_STEP = 1.0E-4;
-    // More than this in one tick is a teleport, not travel
+    // More than this in a tick is a teleport
     private static final double MAX_TRAVEL = 128;
+    // More than a slope or a furnace cart adds in a tick. A powered rail's launch is not held against
+    private static final double HOLD_LIMIT = 0.1;
 
     private static long clock;
 
@@ -37,6 +37,8 @@ public class CartMotion {
     public int direction = 1;
     /** The speed of the train this tick. */
     public double trainSpeed;
+    /** How far the front cart went this tick, capped at its speed limit. */
+    public double trainTravel;
     /** Whether this cart is at the front this tick. */
     public boolean leading;
     /** How many carts come after this one this tick. */
@@ -45,10 +47,12 @@ public class CartMotion {
     public Mode mode = Mode.FREE;
     /** Speed the cart was given this tick. */
     public double commanded;
-    /** Speed the cart needs this tick, which its own speed limit must not cut short. */
+    /** Speed limit override for this tick. */
     public double speedCap;
-    /** What the cart's own tick did to the speed it was given last tick: its rail's slope, mostly. */
-    public double drift;
+    /** Speed that keeps the cart in place: the opposite of what its own tick adds, on a slope for one. */
+    public double hold;
+    /** Whether the cart was only being kept in place this tick. */
+    public boolean staying;
 
     /** Position at the start of the tick. */
     public @Nullable Vec3 start;
@@ -95,6 +99,7 @@ public class CartMotion {
         this.startFacing = this.facing;
         this.startedOnRails = onRails;
         this.startedAirborne = airborne;
+        this.staying = false;
         this.waypoint = position;
         this.path = 0;
         this.firstDirection = null;
@@ -112,7 +117,13 @@ public class CartMotion {
         this.mode = Mode.DRIVEN;
     }
 
-    /** Records where the cart is between two moves. The moves follow the rails, so their lengths add up to the path. */
+    /** After the cart's own tick: whatever speed a cart that was to stay still has left is cancelled next time. */
+    public void settle(double speed) {
+        this.hold = this.staying ? this.hold - speed : 0;
+        if (Math.abs(this.hold) > HOLD_LIMIT) this.hold = 0;
+    }
+
+    /** Adds the move since the last waypoint to the path. */
     public void mark(Vec3 position) {
         if (this.waypoint == null) return;
 
@@ -128,8 +139,7 @@ public class CartMotion {
     }
 
     /**
-     * @param towardsFirst where the first cart of the chain lies judging by the neighbouring carts, for when the cart
-     *                     has no usable facing of its own
+     * @param towardsFirst fallback for an unusable facing
      */
     public void finish(Vec3 position, @Nullable Vec3 towardsFirst) {
         if (this.waypoint == null) return;
@@ -141,7 +151,7 @@ public class CartMotion {
             return;
         }
 
-        // The facing is the track direction where the last tick ended, which is where this one began
+        // facing is the track direction where this tick began
         double alignment = this.facing == null ? 0 : this.firstDirection.dot(this.facing);
         if (Math.abs(alignment) < 0.2 && towardsFirst != null) alignment = this.firstDirection.dot(towardsFirst);
 
@@ -151,16 +161,16 @@ public class CartMotion {
     }
 
     /**
-     * The chain was turned round: what was towards its first cart is now towards its last.
+     * The chain was reversed.
      *
-     * @param facing the facing the cart had before
+     * @param facing the facing before
      */
     public void reverse(@Nullable Vec3 facing) {
         this.facing = facing == null ? null : facing.reverse();
         this.direction = -this.direction;
         this.trainSpeed = -this.trainSpeed;
         this.commanded = -this.commanded;
-        this.drift = -this.drift;
+        this.hold = -this.hold;
     }
 
     /** For a cart that is not part of a train. */
@@ -172,7 +182,8 @@ public class CartMotion {
         this.mode = Mode.FREE;
         this.commanded = 0;
         this.speedCap = 0;
-        this.drift = 0;
+        this.hold = 0;
+        this.staying = false;
         this.waypoint = null;
         this.travelled = 0;
     }

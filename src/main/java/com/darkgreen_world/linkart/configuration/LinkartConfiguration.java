@@ -14,18 +14,17 @@ import net.fabricmc.loader.api.FabricLoader;
 
 public class LinkartConfiguration {
     public static int pathfindingDistance = 6;
-    public static int collisionDepth = 8;
+    public static int collisionDepth = 4;
     public static double distance = 1.2d;
-    public static double breakSpeed = 70d;
     public static double breakLoadPerCart = 0.02d;
     public static boolean chunkloading = false;
     public static int chunkloadingRadius = 3;
 
     private static final String FILE = "linkart.toml";
-    // Where the settings were kept before, without a word of explanation
+    // Previous config file, read once to migrate
     private static final String OLD_FILE = "linkart.json";
 
-    // Reads the settings, then writes the file back out so that it has every setting and this version's comments.
+    // Reads the settings, then rewrites the file with every setting and current comments.
     public static void load() {
         Path directory = FabricLoader.getInstance().getConfigDir();
         Path file = directory.resolve(FILE);
@@ -46,7 +45,6 @@ public class LinkartConfiguration {
         pathfindingDistance = integer(values, "pathfindingDistance", pathfindingDistance);
         collisionDepth = integer(values, "collisionDepth", collisionDepth);
         distance = decimal(values, "distance", distance);
-        breakSpeed = decimal(values, "breakSpeed", breakSpeed);
         breakLoadPerCart = decimal(values, "breakLoadPerCart", breakLoadPerCart);
         chunkloading = flag(values, "chunkloading", chunkloading);
         chunkloadingRadius = integer(values, "chunkloadingRadius", chunkloadingRadius);
@@ -62,68 +60,43 @@ public class LinkartConfiguration {
         StringBuilder out = new StringBuilder();
 
         comment(out,
-                "Linkart settings. Change the values and restart, or run /linkart config reload.",
-                "This file is written anew every time it is read: the values are kept, anything else is not.");
+                "Linkart settings. Edit, then restart or run /linkart config reload.",
+                "This file is rewritten whenever it is read: values are kept, anything else is not.");
 
         setting(out, "pathfindingDistance", pathfindingDistance,
-                "How far out of place, in blocks, a cart may get before its link breaks. Also how far apart two carts",
-                "may be when you link them.",
-                "Carts follow the track exactly, so in ordinary running none gets anywhere near this. It is what lets go",
-                "of a cart that was teleported, went through a portal or got stuck. Off the rails, twice the train's",
-                "speed is allowed on top of it.",
-                "Default: 6. Recommended: 4 to 8.",
-                "Lower: links break when a cart is briefly held up, such as on unpowered powered rails at speed.",
-                "Higher: a cart that is held up stays linked for longer and jumps back into place from further away.");
+                "How far out of place, in blocks, a cart may get before its link breaks, and how far apart two carts",
+                "may be when you link them. A safety net for teleports, portals and stuck carts: ordinary running",
+                "never gets near it.",
+                "Default 6, recommended 4 to 8.");
 
         setting(out, "collisionDepth", collisionDepth,
-                "How many links away, in either direction, the carts of one train ignore each other: they don't push",
-                "each other, and on rails they pass through each other.",
-                "Default: 8. Recommended: 8 or more.",
-                "Lower: carts of the same train bump into each other where the track doubles back next to itself, or",
-                "when the train bunches up, and the train slows down or stops.",
-                "Higher: no drawback worth mentioning.");
+                "How many links away the carts of one train ignore each other: no pushing, no getting in the way.",
+                "Default 4, recommended 2 to 8. Below 2, neighbouring carts shove each other and the train stutters.");
 
         setting(out, "distance", distance,
-                "The spacing kept between the centres of neighbouring carts, in blocks. A minecart is 0.98 long.",
-                "Default: 1.2. Recommended: 1.0 to 1.5.",
-                "Lower: below 0.98 the carts overlap.",
-                "Higher: wider gaps between the carts, and a longer train.");
-
-        setting(out, "breakSpeed", breakSpeed,
-                "The speed, in blocks per second, at which a link that is pulling a single cart snaps. See",
-                "breakLoadPerCart for links pulling more than one.",
-                "A link is put to this test in three situations:",
-                " - a cart is swung round a bend (a quarter turn or more within one tick; a 45 degree kink counts half)",
-                " - a cart comes down from a flight, at the speed it comes down with",
-                " - the front cart is stopped dead, by the speed it lost in that tick",
-                "Going straight never breaks a link, however fast.",
-                "Default: 70.0. 0 makes links unbreakable.",
-                "Recommended: somewhat above the speed your trains take their bends at, such as 70 for lines run at 60.",
-                "Lower: trains shed carts in bends and hard stops they used to survive.",
-                "Higher: only really fast trains come apart.");
+                "Spacing between the centres of neighbouring carts, in blocks. A minecart is 0.98 long.",
+                "Default 1.2, recommended 1.0 to 1.5.");
 
         setting(out, "breakLoadPerCart", breakLoadPerCart,
-                "How much every further cart behind a link adds to its load. A link pulling N carts snaps at",
-                "breakSpeed / (1 + breakLoadPerCart * (N - 1)).",
-                "A train that is too long for its speed lets go of the carts that are too many, at its back, in one piece.",
-                "With the defaults (70 and 0.02), the longest train that gets round a bend whole is 39 carts at 40",
-                "blocks per second, 22 at 50, 10 at 60, 5 at 65 and 2 at 70.",
-                "Default: 0.02. Recommended: 0.01 to 0.05. 0 makes the length of the train not matter.",
-                "Lower: long trains can go nearly as fast as short ones.",
-                "Higher: long trains have to slow down for bends, or be split up.");
+                "How easily trains come apart. A train of N carts holds as long as",
+                "breakLoadPerCart * N * speed * speed stays within 940, with the speed in blocks per second.",
+                "This is tested when a cart rounds a bend, comes down from a flight, or the front cart is stopped dead.",
+                "Going straight never breaks a link. A train that is too long lets go of the extra carts at its back.",
+                "Longest train that gets round a bend whole, by speed:",
+                "             8    16    32    48    64    80",
+                "   0.01    any   367    91    40    22    14",
+                "   0.02    734   183    45    20    11     7",
+                "   0.04    367    91    22    10     5     3",
+                "Default 0.02, recommended 0.01 to 0.04. 0 makes links unbreakable.");
 
         setting(out, "chunkloading", chunkloading,
-                "Whether moving trains keep the chunks around them loaded, so that they keep running with no player",
-                "near, and start running again after a restart.",
-                "Only carts with a cart linked on both sides load chunks, so a train needs at least three carts.",
-                "Default: false. Recommended: false, unless you need trains that run unattended.",
-                "true: every moving train costs the server the chunks it holds loaded.");
+                "Whether moving trains keep the chunks around them loaded, also after a restart. Takes a train of at",
+                "least three carts, and costs the server every chunk it holds loaded.",
+                "Default false.");
 
         setting(out, "chunkloadingRadius", chunkloadingRadius,
-                "How many chunks around each of those carts are kept loaded. Only matters with chunkloading on.",
-                "Default: 3. Recommended: 2 or 3.",
-                "Lower: below 2 the cart's own chunk stops running entities, and the train stops with it.",
-                "Higher: more chunks loaded per train.");
+                "How many chunks around each cart are kept loaded, with chunkloading on.",
+                "Default 3, recommended 2 or 3. Below 2 the train itself stops running.");
 
         return out.toString();
     }
@@ -138,7 +111,7 @@ public class LinkartConfiguration {
         out.append(key).append(" = ").append(value).append('\n');
     }
 
-    // Nothing here is a string or a table, so a line is a key, a value and perhaps a comment after it
+    // Flat key = value lines only
     private static void readToml(Path file, Map<String, String> values) throws IOException {
         for (String line : Files.readAllLines(file, StandardCharsets.UTF_8)) {
             int comment = line.indexOf('#');

@@ -25,9 +25,7 @@ public abstract class ServerLevelMixin {
         CartMotion.advanceClock();
     }
 
-    // Tick a linked cart only after the cart ahead of it in its train, so it can repeat what that cart did this tick
-    // rather than what it did the tick before. Otherwise every cart that comes first in the entity list lags a tick
-    // behind, and its gap stretches and snaps back with every change in speed.
+    // Tick the cart ahead first, so a cart follows this tick's movement rather than last tick's.
     @Inject(at = @At("HEAD"), method = "tickNonPassenger", cancellable = true)
     private void linkart$tickAheadFirst(Entity entity, CallbackInfo ci) {
         if (!(entity instanceof AbstractMinecart minecart)) return;

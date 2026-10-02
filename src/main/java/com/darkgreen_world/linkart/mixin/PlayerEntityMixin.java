@@ -30,9 +30,6 @@ public abstract class PlayerEntityMixin extends LivingEntity {
     @Unique private CartOperation operation;
 
     @Inject(at = @At("HEAD"), method = "interactOn", cancellable = true)
-    //? if <26.1 {
-    //void onInteract(Entity entity, InteractionHand hand, CallbackInfoReturnable<InteractionResult> cir) {
-    //? } else
     void onInteract(Entity entity, InteractionHand hand, Vec3 location, CallbackInfoReturnable<InteractionResult> cir) {
         if (entity instanceof AbstractMinecart minecart) {
             if(level().isClientSide()) return;
@@ -41,7 +38,7 @@ public abstract class PlayerEntityMixin extends LivingEntity {
             ItemStack stack = player.getItemInHand(hand);
 
             if (!stack.is(Linkart.LINKERS)) return;
-            // Without sneaking, a click on a cart is what it always was: getting in, opening its chest
+            // Vanilla interaction unless sneaking
             if (!player.isShiftKeyDown()) return;
 
             if (this.operation != null) {
