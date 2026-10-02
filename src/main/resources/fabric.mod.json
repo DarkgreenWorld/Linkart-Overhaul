@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "id": "linkart",
+  "id": "${id}",
   "version": "${version}",
   "name": "${name}",
   "description": "Link together minecarts with ease!",
