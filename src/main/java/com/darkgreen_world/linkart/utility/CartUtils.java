@@ -157,6 +157,7 @@ public class CartUtils {
 
         for (AbstractMinecart member : carts) {
             CartMotion state = member.linkart$getMotion();
+            state.drift = 0;
             if (state.mode == CartMotion.Mode.SLAVED) continue;
 
             Vec3 facing = state.facing != null ? state.facing : towardsFirst(member);
@@ -165,7 +166,8 @@ public class CartUtils {
 
             if (state.mode == CartMotion.Mode.DRIVEN) {
                 // What this cart's own tick, and anything pushing it since, made of the speed it was given
-                double estimate = state.trainSpeed + actual - state.commanded;
+                state.drift = actual - state.commanded;
+                double estimate = state.trainSpeed + state.drift;
                 total += estimate;
 
                 if (state.leading && Math.abs(state.commanded) > 0.03 && actual / state.commanded < OBSTRUCTED_SHARE) {

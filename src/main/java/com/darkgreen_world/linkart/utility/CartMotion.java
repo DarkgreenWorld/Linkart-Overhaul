@@ -47,6 +47,8 @@ public class CartMotion {
     public double commanded;
     /** Speed the cart needs this tick, which its own speed limit must not cut short. */
     public double speedCap;
+    /** What the cart's own tick did to the speed it was given last tick: its rail's slope, mostly. */
+    public double drift;
 
     /** Position at the start of the tick. */
     public @Nullable Vec3 start;
@@ -158,6 +160,7 @@ public class CartMotion {
         this.direction = -this.direction;
         this.trainSpeed = -this.trainSpeed;
         this.commanded = -this.commanded;
+        this.drift = -this.drift;
     }
 
     /** For a cart that is not part of a train. */
@@ -169,6 +172,7 @@ public class CartMotion {
         this.mode = Mode.FREE;
         this.commanded = 0;
         this.speedCap = 0;
+        this.drift = 0;
         this.waypoint = null;
         this.travelled = 0;
     }

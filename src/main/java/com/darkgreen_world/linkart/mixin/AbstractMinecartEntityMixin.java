@@ -51,6 +51,8 @@ public abstract class AbstractMinecartEntityMixin extends Entity implements Link
     @Unique private static final double PARKED_SLACK = 0.08;
     // How fast carts that came down in a heap move apart
     @Unique private static final double SPREAD_SPEED = 0.3;
+    // A slope adds well under this to a cart's speed in a tick. A powered rail adds more, and is not to be held against
+    @Unique private static final double HOLD_LIMIT = 0.05;
 
     public AbstractMinecartEntityMixin(EntityType<?> type, Level level) {
         super(type, level);
@@ -167,8 +169,19 @@ public abstract class AbstractMinecartEntityMixin extends Entity implements Link
         Vec3 facing = motion.facing != null ? motion.facing : CartUtils.towardsFirst(cast);
         if (facing == null) return;
 
-        setDeltaMovement(facing.x * motion.trainSpeed, getDeltaMovement().y, facing.z * motion.trainSpeed);
-        motion.drive(motion.trainSpeed);
+        double speed = motion.trainSpeed != 0 ? motion.trainSpeed : linkart$hold();
+        setDeltaMovement(facing.x * speed, getDeltaMovement().y, facing.z * speed);
+        motion.drive(speed);
+    }
+
+    // A cart that is to stay where it is can't just be given no speed: on a slope its own tick adds some downhill
+    // before it moves, every tick, and a train that is held by its other carts would have this one creep off and be
+    // fetched back for ever. So it is given what its tick took last time, the other way. What the slope does still
+    // shows in the cart's speed afterwards, and still pulls at the train.
+    @Unique
+    private double linkart$hold() {
+        double drift = this.linkart$motion.drift;
+        return Math.abs(drift) <= HOLD_LIMIT ? -drift : 0;
     }
 
     // Every other cart repeats what the cart ahead of it did this tick (see ServerLevelMixin for the order): the same
@@ -245,12 +258,14 @@ public abstract class AbstractMinecartEntityMixin extends Entity implements Link
         if (aheadMoved && !CartUtils.isOnRails(ahead)) travel = Math.min(travel, Math.abs(motion.trainSpeed));
 
         double target;
+        boolean placing = false;
         if (travel > CartUtils.REST) {
             // Wait rather than back up while under way: a powered rail speeds up whichever way a cart is going, and
             // a cart sent back and forth across one never settles
             target = Math.max(travel + correction, 0);
         } else {
-            target = travel + (Math.abs(correction) > PARKED_SLACK ? correction : 0);
+            placing = Math.abs(correction) > PARKED_SLACK;
+            target = travel + (placing ? correction : 0) + motion.direction * linkart$hold();
         }
 
         double speed = Math.abs(target);
@@ -267,8 +282,9 @@ public abstract class AbstractMinecartEntityMixin extends Entity implements Link
 
         setDeltaMovement(steer.x * speed, vertical, steer.z * speed);
         motion.drive(motion.direction * target);
-        // In a train at rest a cart only moves to get back in its place. Nothing is driving it, whatever its rail adds
-        if (motion.trainSpeed == 0) motion.mode = CartMotion.Mode.SLAVED;
+        // In a train at rest a cart only moves to get back in its place, or to keep up with one that is. Nothing is
+        // driving it then, whatever its rail adds
+        if (motion.trainSpeed == 0 && (placing || Math.abs(travel) >= 1.0E-4)) motion.mode = CartMotion.Mode.SLAVED;
         // Generous, as some carts take a share of their speed limit rather than all of it
         motion.speedCap = speed * 2 + 0.5;
     }
@@ -366,7 +382,9 @@ public abstract class AbstractMinecartEntityMixin extends Entity implements Link
         } else if (motion.startedOnRails && ahead != null && motion.startFacing != null && motion.facing != null) {
             // A quarter turn within the tick is a full bend, whether it is one corner or a hairpin: they are as tight
             double turn = Math.acos(Mth.clamp(motion.startFacing.dot(motion.facing), -1, 1)) / (Math.PI / 2);
-            CartUtils.strain(ahead, cast, Math.abs(motion.travelled) * Math.min(turn, 1));
+            // At the train's speed, not this cart's: one that is catching up goes faster for a tick or two
+            double speed = Math.min(Math.abs(motion.travelled), Math.abs(motion.trainSpeed));
+            CartUtils.strain(ahead, cast, speed * Math.min(turn, 1));
         }
     }
 
