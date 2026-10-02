@@ -170,7 +170,7 @@ public class CartUtils {
             if (state.mode == CartMotion.Mode.SLAVED) continue;
 
             Vec3 facing = state.facing != null ? state.facing : towardsFirst(member);
-            Vec3 velocity = member.getDeltaMovement();
+            Vec3 velocity = member.getDeltaMovement().add(state.pushed);
             double actual = facing == null ? 0 : velocity.x * facing.x + velocity.z * facing.z;
 
             if (state.mode == CartMotion.Mode.DRIVEN) {

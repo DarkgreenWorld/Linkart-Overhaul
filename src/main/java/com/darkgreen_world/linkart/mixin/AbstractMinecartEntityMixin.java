@@ -35,6 +35,7 @@ public abstract class AbstractMinecartEntityMixin extends Entity implements Link
     @Unique private UUID linkart$followerUUID;
     @Unique private ItemStack linkart$itemStack = ItemStack.EMPTY;
     @Unique private final CartMotion linkart$motion = new CartMotion();
+    @Unique private Vec3 linkart$beforePush;
 
     // Spacing error a parked train ignores
     @Unique private static final double PARKED_SLACK = 0.08;
@@ -318,7 +319,24 @@ public abstract class AbstractMinecartEntityMixin extends Entity implements Link
 
     @Inject(at = @At("HEAD"), method = "push(Lnet/minecraft/world/entity/Entity;)V", cancellable = true)
     void onPushAway(Entity entity, CallbackInfo ci) {
-        if (!CollisionUtils.shouldCollide(this, entity)) ci.cancel();
+        if (!CollisionUtils.shouldCollide(this, entity)) {
+            ci.cancel();
+            return;
+        }
+
+        linkart$beforePush = getDeltaMovement();
+    }
+
+    // A shove only ever counts towards the train's speed, as a linked cart's own velocity is set anew every tick.
+    // Left in the velocity it would still reach the client, which plays the rolling sound for a cart standing still.
+    @Inject(at = @At("RETURN"), method = "push(Lnet/minecraft/world/entity/Entity;)V")
+    private void linkart$keepPush(Entity entity, CallbackInfo ci) {
+        Vec3 before = linkart$beforePush;
+        linkart$beforePush = null;
+        if (before == null || level().isClientSide() || linkart$motion.mode == CartMotion.Mode.FREE) return;
+
+        linkart$motion.pushed = linkart$motion.pushed.add(getDeltaMovement().subtract(before));
+        setDeltaMovement(before);
     }
 
     @Inject(at = @At("RETURN"), method = "addAdditionalSaveData")

@@ -53,6 +53,8 @@ public class CartMotion {
     public double hold;
     /** Whether the cart was only being kept in place this tick. */
     public boolean staying;
+    /** What other entities' shoves have added since the cart's last tick, kept out of its velocity. */
+    public Vec3 pushed = Vec3.ZERO;
 
     /** Position at the start of the tick. */
     public @Nullable Vec3 start;
@@ -86,6 +88,7 @@ public class CartMotion {
         this.mode = Mode.FREE;
         this.commanded = 0;
         this.speedCap = 0;
+        this.pushed = Vec3.ZERO;
     }
 
     /** Whether the cart's train has been planned in the current level tick. */
@@ -184,6 +187,7 @@ public class CartMotion {
         this.speedCap = 0;
         this.hold = 0;
         this.staying = false;
+        this.pushed = Vec3.ZERO;
         this.waypoint = null;
         this.travelled = 0;
     }
