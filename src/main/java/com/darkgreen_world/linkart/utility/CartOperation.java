@@ -62,14 +62,14 @@ public record CartOperation(AbstractMinecart minecart) {
 
         //A cart in the middle of a train has no end left to link.
         if (!CartUtils.hasFreeEnd(first) || !CartUtils.hasFreeEnd(other)) return InteractionResult.FAIL;
-        //Linking a train to itself makes a ring. An Ouroboros, if you will.
+        //Linking a train to itself makes a ring. An Ouroboros.
         if (CartUtils.train(first).contains(other)) return InteractionResult.FAIL;
         if (Math.abs(other.distanceTo(first) - 1) > LinkartConfiguration.pathfindingDistance)
             return InteractionResult.FAIL; //Linking beyond pathfindingDistance, will just break on first tick.
-        // Carts on different physics don't make one train (Flash Carts gives each cart its own)
+        // Carts on different physics don't make one train
         if ((first.getBehavior() instanceof NewMinecartBehavior) != (other.getBehavior() instanceof NewMinecartBehavior)) {
-            player.sendOverlayMessage(Component.translatableWithFallback(
-                    "linkart.message.physics_mismatch", "These minecarts run on different physics and can't be linked").withStyle(ChatFormatting.RED));
+            player.sendOverlayMessage(Component.translatable(
+                    "linkart.message.physics_mismatch").withStyle(ChatFormatting.RED));
             return InteractionResult.FAIL;
         }
 

@@ -11,7 +11,7 @@ import net.minecraft.network.chat.Component;
 
 public class LinkartCommand {
 
-    private static final Supplier<Component> RELOADED = () -> Component.translatableWithFallback("commands.linkart.config.reload", "Reloaded the Linkart config");
+    private static final Supplier<Component> RELOADED = () -> Component.translatable("commands.linkart.config.reload");
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("linkart")

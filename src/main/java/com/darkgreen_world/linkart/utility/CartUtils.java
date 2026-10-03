@@ -151,8 +151,8 @@ public class CartUtils {
         }
         if (!uncoupled.isEmpty()) {
             for (ServerPlayer player : ((ServerLevel) cart.level()).players()) {
-                if (uncoupled.stream().anyMatch(other -> player.distanceToSqr(other) < 16 * 16)) player.sendOverlayMessage(Component.translatableWithFallback(
-                        "linkart.message.physics_uncoupled", "Minecarts on different physics were uncoupled").withStyle(ChatFormatting.YELLOW));
+                if (uncoupled.stream().anyMatch(other -> player.distanceToSqr(other) < 16 * 16)) player.sendOverlayMessage(Component.translatable(
+                        "linkart.message.physics_uncoupled").withStyle(ChatFormatting.YELLOW));
             }
             return false;
         }
