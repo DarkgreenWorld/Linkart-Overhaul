@@ -4,13 +4,16 @@ import com.darkgreen_world.linkart.Linkart;
 import com.darkgreen_world.linkart.configuration.LinkartConfiguration;
 import java.util.Map;
 import java.util.WeakHashMap;
+import net.minecraft.ChatFormatting;
 import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.vehicle.minecart.AbstractMinecart;
+import net.minecraft.world.entity.vehicle.minecart.NewMinecartBehavior;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.EntityHitResult;
@@ -63,6 +66,12 @@ public record CartOperation(AbstractMinecart minecart) {
         if (CartUtils.train(first).contains(other)) return InteractionResult.FAIL;
         if (Math.abs(other.distanceTo(first) - 1) > LinkartConfiguration.pathfindingDistance)
             return InteractionResult.FAIL; //Linking beyond pathfindingDistance, will just break on first tick.
+        // Carts on different physics don't make one train (Flash Carts gives each cart its own)
+        if ((first.getBehavior() instanceof NewMinecartBehavior) != (other.getBehavior() instanceof NewMinecartBehavior)) {
+            player.sendOverlayMessage(Component.translatableWithFallback(
+                    "linkart.message.physics_mismatch", "These minecarts run on different physics and can't be linked").withStyle(ChatFormatting.RED));
+            return InteractionResult.FAIL;
+        }
 
         //Reverse either chain if needed for the free ends to fit.
         if (first.linkart$getFollower() != null) CartUtils.reverse(first);

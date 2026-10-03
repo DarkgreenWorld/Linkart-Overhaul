@@ -33,17 +33,23 @@ public abstract class EntityMixin {
     @Inject(at = @At("HEAD"), method = "collide(Lnet/minecraft/world/phys/Vec3;)Lnet/minecraft/world/phys/Vec3;", cancellable = true)
     void linkart$onRecalculateVelocity(Vec3 movement, CallbackInfoReturnable<Vec3> cir) {
         if ((Object) this instanceof AbstractMinecart minecart) {
-            // Path waypoint, one per move
-            if (!minecart.level().isClientSide()) minecart.linkart$getMotion().mark(minecart.position());
-
             List<Entity> collisions = minecart.level().getEntities((Entity) (Object) this, minecart.getBoundingBox().expandTowards(movement));
 
             for (Entity entity : collisions) {
                 if (!CollisionUtils.shouldCollide(minecart, entity) && minecart.level().getBlockState(minecart.blockPosition()).getBlock() instanceof BaseRailBlock) {
+                    if (!minecart.level().isClientSide()) minecart.linkart$getMotion().mark(movement);
                     cir.setReturnValue(movement);
                     return;
                 }
             }
+        }
+    }
+
+    // A cart's path, one move at a time
+    @Inject(at = @At("RETURN"), method = "collide(Lnet/minecraft/world/phys/Vec3;)Lnet/minecraft/world/phys/Vec3;")
+    void linkart$markMove(Vec3 movement, CallbackInfoReturnable<Vec3> cir) {
+        if ((Object) this instanceof AbstractMinecart minecart && !minecart.level().isClientSide()) {
+            minecart.linkart$getMotion().mark(cir.getReturnValue());
         }
     }
 }

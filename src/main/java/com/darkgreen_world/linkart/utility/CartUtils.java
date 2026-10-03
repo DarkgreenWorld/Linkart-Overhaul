@@ -4,18 +4,22 @@ import com.darkgreen_world.linkart.configuration.LinkartConfiguration;
 import com.darkgreen_world.linkart.mixin.MinecartAccessor;
 import java.util.ArrayList;
 import java.util.List;
+import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ItemParticleOption;
 import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.vehicle.minecart.AbstractMinecart;
+import net.minecraft.world.entity.vehicle.minecart.NewMinecartBehavior;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BaseRailBlock;
 import net.minecraft.world.phys.Vec3;
-import org.jetbrains.annotations.Nullable;
 import org.apache.logging.log4j.core.jmx.Server;
+import org.jetbrains.annotations.Nullable;
 
 public class CartUtils {
 
@@ -135,6 +139,24 @@ public class CartUtils {
             return true;
         }
 
+        // Flash Carts gives each cart its own physics and can change it later. A train runs on one kind, so it comes
+        // apart where they differ, telling whoever is near enough to see it
+        List<AbstractMinecart> uncoupled = new ArrayList<>();
+        for (int i = 0; i + 1 < carts.size(); i++) {
+            AbstractMinecart behind = carts.get(i + 1);
+            if ((carts.get(i).getBehavior() instanceof NewMinecartBehavior) == (behind.getBehavior() instanceof NewMinecartBehavior)) continue;
+
+            unlinkFromParent(behind);
+            uncoupled.add(behind);
+        }
+        if (!uncoupled.isEmpty()) {
+            for (ServerPlayer player : ((ServerLevel) cart.level()).players()) {
+                if (uncoupled.stream().anyMatch(other -> player.distanceToSqr(other) < 16 * 16)) player.sendOverlayMessage(Component.translatableWithFallback(
+                        "linkart.message.physics_uncoupled", "Minecarts on different physics were uncoupled").withStyle(ChatFormatting.YELLOW));
+            }
+            return false;
+        }
+
         double total = 0;
         int count = 0;
         double obstructed = Double.NaN;
@@ -161,6 +183,13 @@ public class CartUtils {
             Vec3 facing = state.facing != null ? state.facing : towardsFirst(member);
             Vec3 velocity = member.getDeltaMovement().add(state.pushed);
             double actual = facing == null ? 0 : velocity.x * facing.x + velocity.z * facing.z;
+            // Old minecart physics keep up to 2 a tick of speed but move a ridden cart by three quarters of it, and no
+            // more than the limit. They point the speed along an axis when the cart goes on to the next block, whichever
+            // way the track runs
+            if (!(member.getBehavior() instanceof NewMinecartBehavior)) {
+                double moves = velocity.horizontalDistance() * (member.isVehicle() ? 0.75 : 1);
+                actual = Math.copySign(Math.min(moves, speedLimit(member)), actual);
+            }
             double shove = facing == null ? 0 : state.pushed.x * facing.x + state.pushed.z * facing.z;
             shoves += shove;
 

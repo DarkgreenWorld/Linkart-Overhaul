@@ -112,7 +112,9 @@ public abstract class AbstractMinecartEntityMixin extends Entity implements Link
         if (facing == null) return;
 
         double speed = motion.trainSpeed != 0 ? motion.trainSpeed : linkart$hold();
-        setDeltaMovement(facing.x * speed, getDeltaMovement().y, facing.z * speed);
+        // Old minecart physics move a ridden cart three quarters of its speed
+        double given = isVehicle() && !(cast.getBehavior() instanceof NewMinecartBehavior) ? speed / 0.75 : speed;
+        setDeltaMovement(facing.x * given, getDeltaMovement().y, facing.z * given);
         motion.drive(speed);
     }
 
@@ -205,6 +207,8 @@ public abstract class AbstractMinecartEntityMixin extends Entity implements Link
         }
 
         double speed = Math.abs(target);
+        // Old minecart physics move a ridden cart three quarters of its speed
+        if (isVehicle() && !(cast.getBehavior() instanceof NewMinecartBehavior)) speed /= 0.75;
 
         if (speed < 1.0E-4) {
             setDeltaMovement(0, vertical, 0);
@@ -287,7 +291,7 @@ public abstract class AbstractMinecartEntityMixin extends Entity implements Link
             linkart$heldPush = null;
         }
 
-        motion.finish(position(), CartUtils.towardsFirst(cast));
+        motion.finish(CartUtils.towardsFirst(cast));
         if (!moved) return;
 
         // Whatever speed a cart that was to stay still has left gets cancelled next tick
@@ -352,7 +356,9 @@ public abstract class AbstractMinecartEntityMixin extends Entity implements Link
     // Raises the speed limit to speedCap when set
     @Inject(at = @At("RETURN"), method = "getMaxSpeed", cancellable = true)
     private void linkart$liftSpeedCap(ServerLevel level, CallbackInfoReturnable<Double> cir) {
-        if (linkart$motion.speedCap > cir.getReturnValue()) cir.setReturnValue(linkart$motion.speedCap);
+        if (linkart$motion.speedCap > cir.getReturnValue() && ((AbstractMinecart) (Object) this).getBehavior() instanceof NewMinecartBehavior) {
+            cir.setReturnValue(linkart$motion.speedCap);
+        }
     }
 
     @Inject(at = @At("HEAD"), method = "push(Lnet/minecraft/world/entity/Entity;)V", cancellable = true)

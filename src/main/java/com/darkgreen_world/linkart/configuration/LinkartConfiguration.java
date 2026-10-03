@@ -17,6 +17,7 @@ public class LinkartConfiguration {
     public static boolean chunkloading = false;
     public static int chunkloadingRadius = 3;
 
+    // Whether a setting was missing from the file or could not be read
     private static boolean incomplete;
 
     // Reads the settings. The file is rewritten when a setting is missing, unreadable or unknown.
@@ -66,7 +67,7 @@ public class LinkartConfiguration {
 
         setting(out, "pathfindingDistance", pathfindingDistance,
                 "How far out of place, in blocks, a cart may get before its link breaks, and how far apart two carts",
-                "may be when you link them. A safety net for teleports, portals and stuck carts",
+                "may be when you link them. A safety net for teleports, portals and stuck carts.",
                 "Default 6, recommended 4 to 8.");
 
         setting(out, "collisionDepth", collisionDepth,

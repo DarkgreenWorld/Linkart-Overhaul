@@ -1,0 +1,6 @@
+{
+  "tag.item.linkart.linkers": "矿车连接物品",
+  "commands.linkart.config.reload": "已重新加载 Linkart 配置",
+  "linkart.message.physics_mismatch": "这两节矿车的物理不同，无法连挂",
+  "linkart.message.physics_uncoupled": "物理不同的矿车已自动断开"
+}

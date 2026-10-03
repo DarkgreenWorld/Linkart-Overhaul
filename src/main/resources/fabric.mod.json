@@ -34,7 +34,8 @@
   "depends": {
     "fabricloader": ">=${loader_version}",
     "fabric-api": "*",
-    "minecraft": "${minecraft_version}"
+    "minecraft": "${minecraft_version}",
+    "server_translations_api": "*"
   },
   "custom": {
     "loom:injected_interfaces": {

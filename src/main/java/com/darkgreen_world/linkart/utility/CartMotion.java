@@ -66,7 +66,7 @@ public class CartMotion {
 
     private long plannedAt = -1;
     private long tickedAt = -1;
-    private @Nullable Vec3 waypoint;
+    private boolean recording;
     private double path;
     private @Nullable Vec3 firstDirection;
     private @Nullable Vec3 lastDirection;
@@ -102,7 +102,7 @@ public class CartMotion {
         this.startedOnRails = onRails;
         this.startedAirborne = airborne;
         this.staying = false;
-        this.waypoint = position;
+        this.recording = true;
         this.path = 0;
         this.firstDirection = null;
         this.lastDirection = null;
@@ -119,29 +119,25 @@ public class CartMotion {
         this.mode = Mode.DRIVEN;
     }
 
-    /** Adds the move since the last waypoint to the path. */
-    public void mark(Vec3 position) {
-        if (this.waypoint == null) return;
+    /** Adds a move the cart made to its path. Whatever else puts it elsewhere, such as being set onto the rail, is no travel. */
+    public void mark(Vec3 move) {
+        if (!this.recording) return;
 
-        double x = position.x - this.waypoint.x;
-        double z = position.z - this.waypoint.z;
-        double length = Math.sqrt(x * x + z * z);
-        // Shorter moves add up rather than set a direction
+        double length = move.horizontalDistance();
+        this.path += length;
+        // Too short to tell the direction by
         if (length < 1.0E-4) return;
 
-        this.path += length;
-        this.lastDirection = new Vec3(x / length, 0, z / length);
+        this.lastDirection = new Vec3(move.x / length, 0, move.z / length);
         if (this.firstDirection == null) this.firstDirection = this.lastDirection;
-        this.waypoint = position;
     }
 
     /**
      * @param towardsFirst fallback for an unusable facing
      */
-    public void finish(Vec3 position, @Nullable Vec3 towardsFirst) {
-        if (this.waypoint == null) return;
-        mark(position);
-        this.waypoint = null;
+    public void finish(@Nullable Vec3 towardsFirst) {
+        if (!this.recording) return;
+        this.recording = false;
 
         // Over 128 in a tick is a teleport
         if (this.firstDirection == null || this.lastDirection == null || this.path > 128) {
@@ -180,7 +176,7 @@ public class CartMotion {
         this.staying = false;
         this.bend = 0;
         this.pushed = Vec3.ZERO;
-        this.waypoint = null;
+        this.recording = false;
         this.travelled = 0;
     }
 }
