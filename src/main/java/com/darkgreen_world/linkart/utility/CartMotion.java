@@ -19,12 +19,6 @@ public class CartMotion {
         SLAVED
     }
 
-    // Shorter moves add up rather than set a direction
-    private static final double MIN_STEP = 1.0E-4;
-    // More than this in a tick is a teleport
-    private static final double MAX_TRAVEL = 128;
-    // More than a slope or a furnace cart adds in a tick. A powered rail's launch is not held against
-    private static final double HOLD_LIMIT = 0.1;
 
     private static long clock;
 
@@ -41,6 +35,8 @@ public class CartMotion {
     public double trainTravel;
     /** Whether this cart is at the front this tick. */
     public boolean leading;
+    /** Whether a blocked cart is keeping the train from moving this tick. */
+    public boolean held;
     /** How many carts come after this one this tick. */
     public int trailing;
 
@@ -53,6 +49,8 @@ public class CartMotion {
     public double hold;
     /** Whether the cart was only being kept in place this tick. */
     public boolean staying;
+    /** Quarter turns so far in the bend the cart is in, signed by direction. */
+    public double bend;
     /** What other entities' shoves have added since the cart's last tick, kept out of its velocity. */
     public Vec3 pushed = Vec3.ZERO;
 
@@ -78,10 +76,11 @@ public class CartMotion {
         clock++;
     }
 
-    public void assign(@Nullable AbstractMinecart ahead, int direction, double trainSpeed, int trailing) {
+    public void assign(@Nullable AbstractMinecart ahead, int direction, double trainSpeed, int trailing, boolean held) {
         this.plannedAt = clock;
         this.ahead = ahead;
         this.leading = ahead == null;
+        this.held = held;
         this.trailing = trailing;
         this.direction = direction;
         this.trainSpeed = trainSpeed;
@@ -120,12 +119,6 @@ public class CartMotion {
         this.mode = Mode.DRIVEN;
     }
 
-    /** After the cart's own tick: whatever speed a cart that was to stay still has left is cancelled next time. */
-    public void settle(double speed) {
-        this.hold = this.staying ? this.hold - speed : 0;
-        if (Math.abs(this.hold) > HOLD_LIMIT) this.hold = 0;
-    }
-
     /** Adds the move since the last waypoint to the path. */
     public void mark(Vec3 position) {
         if (this.waypoint == null) return;
@@ -133,7 +126,8 @@ public class CartMotion {
         double x = position.x - this.waypoint.x;
         double z = position.z - this.waypoint.z;
         double length = Math.sqrt(x * x + z * z);
-        if (length < MIN_STEP) return;
+        // Shorter moves add up rather than set a direction
+        if (length < 1.0E-4) return;
 
         this.path += length;
         this.lastDirection = new Vec3(x / length, 0, z / length);
@@ -149,7 +143,8 @@ public class CartMotion {
         mark(position);
         this.waypoint = null;
 
-        if (this.firstDirection == null || this.lastDirection == null || this.path > MAX_TRAVEL) {
+        // Over 128 in a tick is a teleport
+        if (this.firstDirection == null || this.lastDirection == null || this.path > 128) {
             this.travelled = 0;
             return;
         }
@@ -163,13 +158,9 @@ public class CartMotion {
         this.facing = forward ? this.lastDirection : this.lastDirection.reverse();
     }
 
-    /**
-     * The chain was reversed.
-     *
-     * @param facing the facing before
-     */
-    public void reverse(@Nullable Vec3 facing) {
-        this.facing = facing == null ? null : facing.reverse();
+    /** The chain was reversed: everything that depends on its order flips. */
+    public void reverse(@Nullable Vec3 facingBefore) {
+        this.facing = facingBefore == null ? null : facingBefore.reverse();
         this.direction = -this.direction;
         this.trainSpeed = -this.trainSpeed;
         this.commanded = -this.commanded;
@@ -187,6 +178,7 @@ public class CartMotion {
         this.speedCap = 0;
         this.hold = 0;
         this.staying = false;
+        this.bend = 0;
         this.pushed = Vec3.ZERO;
         this.waypoint = null;
         this.travelled = 0;

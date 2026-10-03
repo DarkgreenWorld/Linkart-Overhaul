@@ -2,14 +2,10 @@ package com.darkgreen_world.linkart.mixin;
 
 import com.darkgreen_world.linkart.utility.CartMotion;
 import com.darkgreen_world.linkart.utility.CartUtils;
-import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
-import java.util.Set;
-import java.util.function.BooleanSupplier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.vehicle.minecart.AbstractMinecart;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -17,19 +13,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(ServerLevel.class)
 public abstract class ServerLevelMixin {
 
-    @Unique private final Set<AbstractMinecart> linkart$tickedCarts = new ReferenceOpenHashSet<>();
-
-    @Inject(at = @At("HEAD"), method = "tick(Ljava/util/function/BooleanSupplier;)V")
-    private void linkart$resetTickedCarts(BooleanSupplier hasTimeLeft, CallbackInfo ci) {
-        linkart$tickedCarts.clear();
-        CartMotion.advanceClock();
-    }
-
     // Tick the cart ahead first, so a cart follows this tick's movement rather than last tick's.
     @Inject(at = @At("HEAD"), method = "tickNonPassenger", cancellable = true)
     private void linkart$tickAheadFirst(Entity entity, CallbackInfo ci) {
         if (!(entity instanceof AbstractMinecart minecart)) return;
-        if (!linkart$tickedCarts.add(minecart)) {
+        if (minecart.linkart$getMotion().tickedThisTick()) {
             // Already ticked this tick, ahead of a cart following it
             ci.cancel();
             return;

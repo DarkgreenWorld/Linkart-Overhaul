@@ -21,9 +21,15 @@ import net.minecraft.server.level.TicketType;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.world.entity.vehicle.minecart.AbstractMinecart;
+import net.minecraft.world.entity.vehicle.minecart.MinecartFurnace;
+import net.minecraft.world.entity.vehicle.minecart.NewMinecartBehavior;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.PoweredRailBlock;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
 @Mixin({AbstractMinecart.class})
@@ -35,14 +41,8 @@ public abstract class AbstractMinecartEntityMixin extends Entity implements Link
     @Unique private UUID linkart$followerUUID;
     @Unique private ItemStack linkart$itemStack = ItemStack.EMPTY;
     @Unique private final CartMotion linkart$motion = new CartMotion();
-    @Unique private Vec3 linkart$beforePush;
-
-    // Spacing error a parked train ignores
-    @Unique private static final double PARKED_SLACK = 0.08;
-    // Speed at which piled-up carts move apart
-    @Unique private static final double SPREAD_SPEED = 0.3;
-    // Gap error beyond which a cart may exceed its speed limit to catch up
-    @Unique private static final double CATCH_UP_SLACK = 0.05;
+    @Unique private Vec3 linkart$heldPush;
+    @Unique private boolean linkart$wasMoving;
 
     public AbstractMinecartEntityMixin(EntityType<?> type, Level level) {
         super(type, level);
@@ -58,6 +58,7 @@ public abstract class AbstractMinecartEntityMixin extends Entity implements Link
         // Not part of a train
         if (!motion.plannedThisTick()) return;
 
+        linkart$wasMoving = getDeltaMovement().horizontalDistanceSqr() > 0;
         boolean onRails = CartUtils.isOnRails(cast);
         motion.begin(position(), onRails, !onRails && !onGround());
 
@@ -71,6 +72,22 @@ public abstract class AbstractMinecartEntityMixin extends Entity implements Link
                 linkart$follow(cast, motion.ahead);
             } else {
                 linkart$chase(cast, motion.ahead);
+            }
+        }
+
+        // A furnace cart would drive a held train on whatever speed it is given
+        if (motion.held && cast instanceof MinecartFurnace furnace) {
+            if (!FabricLoader.getInstance().isModLoaded("better_minecart_with_furnace")) {
+                linkart$heldPush = furnace.push;
+                furnace.push = Vec3.ZERO;
+            } else {
+                // That mod sets the push to its thrust along the track every tick, whichever way the cart is sent, so
+                // it can be cancelled out. Not while its engine is off: put out, or on an unpowered powered rail
+                BlockState rail = level().getBlockState(cast.getCurrentBlockPosOrRailBelow());
+                boolean braked = rail.is(Blocks.POWERED_RAIL) && !rail.getValue(PoweredRailBlock.POWERED);
+                if (!braked && !entityTags().contains("better_minecart_with_furnace.extinguished")) {
+                    setDeltaMovement(getDeltaMovement().subtract(furnace.push.scale(1 / 0.8)));
+                }
             }
         }
 
@@ -177,11 +194,12 @@ public abstract class AbstractMinecartEntityMixin extends Entity implements Link
 
         double target;
         boolean placing = false;
-        if (travel > CartUtils.REST) {
+        if (travel > 1.0E-3) {
             // Under way: wait rather than back up, which oscillates on powered rails
             target = Math.max(travel + correction, 0);
         } else {
-            placing = Math.abs(correction) > PARKED_SLACK;
+            // A parked train leaves small spacing errors alone
+            placing = Math.abs(correction) > 0.08;
             target = travel + (placing ? correction : 0);
             if (!placing && Math.abs(travel) < 1.0E-4) target += motion.direction * linkart$hold();
         }
@@ -203,7 +221,7 @@ public abstract class AbstractMinecartEntityMixin extends Entity implements Link
         // Parked: repositioning is not drive
         if (motion.trainSpeed == 0 && (placing || Math.abs(travel) >= 1.0E-4)) motion.mode = CartMotion.Mode.SLAVED;
         // Lift the speed limit only to catch up. Doubled, as some carts get a share of their limit
-        if (error > CATCH_UP_SLACK) motion.speedCap = speed * 2 + 0.5;
+        if (error > 0.05) motion.speedCap = speed * 2 + 0.5;
     }
 
     // Off the rails: head straight for the cart ahead and stay a space behind it.
@@ -223,8 +241,11 @@ public abstract class AbstractMinecartEntityMixin extends Entity implements Link
         if (distance <= 0 && (ahead.onGround() || CartUtils.isOnRails(ahead))) {
             // Next to a landed cart: fall freely and move apart sideways rather than hover above it
             double horizontalGap = toAhead.horizontalDistance();
-            double room = Math.min(LinkartConfiguration.distance - horizontalGap, SPREAD_SPEED);
-            Vec3 away = horizontalGap > 0.05 ? CartUtils.horizontal(toAhead.reverse()) : linkart$behind();
+            double room = Math.min(LinkartConfiguration.distance - horizontalGap, 0.3);
+            Vec3 away;
+            if (horizontalGap > 0.05) away = CartUtils.horizontal(toAhead.reverse());
+            else if (motion.facing == null) away = new Vec3(1, 0, 0);
+            else away = motion.direction > 0 ? motion.facing.reverse() : motion.facing;
 
             if (room < 0.02 || away == null) {
                 room = 0;
@@ -240,14 +261,6 @@ public abstract class AbstractMinecartEntityMixin extends Entity implements Link
         double speed = distance <= 1 ? distance * (0.8 + 0.2 * distance) : distance;
         setDeltaMovement(toAhead.normalize().scale(speed));
         motion.speedCap = speed * 2 + 0.5;
-    }
-
-    // Away from the cart ahead along the train, when positions can't tell
-    @Unique
-    private Vec3 linkart$behind() {
-        Vec3 facing = this.linkart$motion.facing;
-        if (facing == null) return new Vec3(1, 0, 0);
-        return this.linkart$motion.direction > 0 ? facing.reverse() : facing;
     }
 
     // Extra gap allowed off the rails: a cart covers up to twice its speed the tick it leaves them.
@@ -269,14 +282,31 @@ public abstract class AbstractMinecartEntityMixin extends Entity implements Link
         CartMotion motion = this.linkart$motion;
         boolean moved = motion.plannedThisTick() && motion.tickedThisTick();
 
+        if (linkart$heldPush != null) {
+            ((MinecartFurnace) cast).push = linkart$heldPush;
+            linkart$heldPush = null;
+        }
+
         motion.finish(position(), CartUtils.towardsFirst(cast));
         if (!moved) return;
 
+        // Whatever speed a cart that was to stay still has left gets cancelled next tick
         Vec3 velocity = getDeltaMovement();
-        motion.settle(motion.facing == null ? 0 : velocity.x * motion.facing.x + velocity.z * motion.facing.z);
+        double left = motion.facing == null ? 0 : velocity.x * motion.facing.x + velocity.z * motion.facing.z;
+        motion.hold = motion.staying ? motion.hold - left : 0;
+        if (Math.abs(motion.hold) > 0.1) motion.hold = 0;
 
         if (motion.ahead == null) {
             motion.trainTravel = Math.min(Math.abs(motion.travelled), CartUtils.speedLimit(cast));
+        }
+
+        /*
+        Vanilla only tells the client a cart has stopped when it slows down by itself. Stopped by its train, the cart
+        would keep its last speed on the client, and its rolling sound with it
+        */
+        if (linkart$wasMoving && cast.getBehavior() instanceof NewMinecartBehavior behavior && behavior.lerpSteps.isEmpty()
+                && getDeltaMovement().horizontalDistanceSqr() == 0) {
+            behavior.lerpSteps.add(new NewMinecartBehavior.MinecartStep(position(), Vec3.ZERO, getYRot(), getXRot(), 1.0F));
         }
 
         // Sync every tick: vanilla's per-cart 3-tick sync lets linked carts drift apart on screen
@@ -287,11 +317,21 @@ public abstract class AbstractMinecartEntityMixin extends Entity implements Link
         linkart$strain(cast);
     }
 
-    // Strain from bends and landings. Crashes show a tick later and are handled in CartUtils.plan.
+    // Strain from bends and landings. Crashes show a tick later, in CartUtils.plan
     @Unique
     private void linkart$strain(AbstractMinecart cast) {
         CartMotion motion = this.linkart$motion;
         AbstractMinecart ahead = motion.ahead;
+
+        // Quarter turns this tick, signed by direction. Rails turn in eighths of a circle; less is rounding
+        double turn = 0;
+        if (motion.startedOnRails && motion.startFacing != null && motion.facing != null) {
+            double cross = motion.startFacing.x * motion.facing.z - motion.startFacing.z * motion.facing.x;
+            turn = Math.copySign(Math.acos(Mth.clamp(motion.startFacing.dot(motion.facing), -1, 1)) / (Math.PI / 2), cross);
+            if (Math.abs(turn) < 0.1) turn = 0;
+        }
+        // A bend can span ticks: turns the same way add up
+        motion.bend = turn * motion.bend > 0 ? motion.bend + turn : turn;
 
         if (motion.startedAirborne && (onGround() || CartUtils.isOnRails(cast))) {
             double speed = motion.start.distanceTo(position());
@@ -303,11 +343,9 @@ public abstract class AbstractMinecartEntityMixin extends Entity implements Link
                 AbstractMinecart behind = CartUtils.behind(cast, motion.direction);
                 if (behind != null) CartUtils.strain(cast, behind, speed);
             }
-        } else if (motion.startedOnRails && ahead != null && motion.startFacing != null && motion.facing != null) {
-            // A quarter turn or more is a full bend
-            double turn = Math.acos(Mth.clamp(motion.startFacing.dot(motion.facing), -1, 1)) / (Math.PI / 2);
-            // At the front cart's speed, not this cart's
-            CartUtils.strain(ahead, cast, motion.trainTravel * Math.min(turn, 1));
+        } else if (ahead != null) {
+            // A quarter turn or more is a full bend. At the front cart's speed, not this cart's
+            CartUtils.strain(ahead, cast, motion.trainTravel * Math.min(Math.abs(motion.bend), 1));
         }
     }
 
@@ -319,24 +357,7 @@ public abstract class AbstractMinecartEntityMixin extends Entity implements Link
 
     @Inject(at = @At("HEAD"), method = "push(Lnet/minecraft/world/entity/Entity;)V", cancellable = true)
     void onPushAway(Entity entity, CallbackInfo ci) {
-        if (!CollisionUtils.shouldCollide(this, entity)) {
-            ci.cancel();
-            return;
-        }
-
-        linkart$beforePush = getDeltaMovement();
-    }
-
-    // A shove only ever counts towards the train's speed, as a linked cart's own velocity is set anew every tick.
-    // Left in the velocity it would still reach the client, which plays the rolling sound for a cart standing still.
-    @Inject(at = @At("RETURN"), method = "push(Lnet/minecraft/world/entity/Entity;)V")
-    private void linkart$keepPush(Entity entity, CallbackInfo ci) {
-        Vec3 before = linkart$beforePush;
-        linkart$beforePush = null;
-        if (before == null || level().isClientSide() || linkart$motion.mode == CartMotion.Mode.FREE) return;
-
-        linkart$motion.pushed = linkart$motion.pushed.add(getDeltaMovement().subtract(before));
-        setDeltaMovement(before);
+        if (!CollisionUtils.shouldCollide(this, entity)) ci.cancel();
     }
 
     @Inject(at = @At("RETURN"), method = "addAdditionalSaveData")
@@ -359,8 +380,8 @@ public abstract class AbstractMinecartEntityMixin extends Entity implements Link
 
     @Override
     public AbstractMinecart linkart$getFollowing() {
-        // An unloaded cart comes back as a new entity
-        if (linkart$following != null && linkart$following.isRemoved()) linkart$following = null;
+        // An unloaded cart comes back as a new entity; a destroyed one is kept until its link is undone
+        if (linkart$following != null && linkart$following.isRemoved() && !linkart$following.getRemovalReason().shouldDestroy()) linkart$following = null;
         if (linkart$following == null && linkart$followingUUID != null) {
             linkart$following = (AbstractMinecart) ((ServerLevel) this.level()).getEntity(linkart$followingUUID);
         }
@@ -377,7 +398,7 @@ public abstract class AbstractMinecartEntityMixin extends Entity implements Link
 
     @Override
     public AbstractMinecart linkart$getFollower() {
-        if (linkart$follower != null && linkart$follower.isRemoved()) linkart$follower = null;
+        if (linkart$follower != null && linkart$follower.isRemoved() && !linkart$follower.getRemovalReason().shouldDestroy()) linkart$follower = null;
         if (linkart$follower == null && linkart$followerUUID != null) {
             linkart$follower = (AbstractMinecart) ((ServerLevel) this.level()).getEntity(linkart$followerUUID);
         }

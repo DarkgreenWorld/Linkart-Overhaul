@@ -7,7 +7,6 @@
     "AbstractMinecartEntityMixin",
     "EntityMixin",
     "MinecartAccessor",
-    "PlayerEntityMixin",
     "ServerLevelMixin"
   ],
   "injectors": {

@@ -1,8 +1,7 @@
 package com.darkgreen_world.linkart.mixin;
 
-import com.darkgreen_world.linkart.utility.CartUtils;
+import com.darkgreen_world.linkart.utility.CartMotion;
 import com.darkgreen_world.linkart.utility.CollisionUtils;
-import com.llamalad7.mixinextras.sugar.Local;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -18,11 +17,16 @@ import net.minecraft.world.phys.Vec3;
 @Mixin(Entity.class)
 public abstract class EntityMixin {
 
-    @Inject(at = @At("HEAD"), method = "remove")
-    void linkart$removeLink(CallbackInfo callbackInformation, @Local(argsOnly = true) Entity.RemovalReason reason) {
-        if ((Entity) (Object) this instanceof AbstractMinecart minecart && !minecart.level().isClientSide() && reason.shouldDestroy()) {
-            CartUtils.unlinkFromParent(minecart);
-            CartUtils.unlinkFromParent(minecart.linkart$getFollower());
+    /*
+    A linked cart's velocity is set anew every tick, so a shove only counts towards its train's speed. Left in the
+    velocity it would reach the client, which plays the rolling sound for a cart that isn't moving.
+    */
+    @Inject(at = @At("HEAD"), method = "push(DDD)V", cancellable = true)
+    void linkart$keepPush(double x, double y, double z, CallbackInfo ci) {
+        if ((Object) this instanceof AbstractMinecart minecart && !minecart.level().isClientSide()
+                && minecart.linkart$getMotion().mode != CartMotion.Mode.FREE) {
+            minecart.linkart$getMotion().pushed = minecart.linkart$getMotion().pushed.add(x, y, z);
+            ci.cancel();
         }
     }
 

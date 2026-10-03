@@ -1,10 +1,7 @@
 package com.darkgreen_world.linkart.configuration;
 
 import com.darkgreen_world.linkart.Linkart;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonParser;
 import java.io.IOException;
-import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -20,24 +17,23 @@ public class LinkartConfiguration {
     public static boolean chunkloading = false;
     public static int chunkloadingRadius = 3;
 
-    private static final String FILE = "linkart.toml";
-    // Previous config file, read once to migrate
-    private static final String OLD_FILE = "linkart.json";
-
     // Reads the settings, then rewrites the file with every setting and current comments.
     public static void load() {
-        Path directory = FabricLoader.getInstance().getConfigDir();
-        Path file = directory.resolve(FILE);
-        Path oldFile = directory.resolve(OLD_FILE);
+        Path file = FabricLoader.getInstance().getConfigDir().resolve("linkart.toml");
         Map<String, String> values = new HashMap<>();
 
         try {
             if (Files.exists(file)) {
-                readToml(file, values);
-            } else if (Files.exists(oldFile)) {
-                readJson(oldFile, values);
+                // Flat key = value lines only
+                for (String line : Files.readAllLines(file, StandardCharsets.UTF_8)) {
+                    int comment = line.indexOf('#');
+                    if (comment >= 0) line = line.substring(0, comment);
+
+                    int equals = line.indexOf('=');
+                    if (equals >= 0) values.put(line.substring(0, equals).trim(), line.substring(equals + 1).trim());
+                }
             }
-        } catch (Exception e) {
+        } catch (IOException e) {
             Linkart.LOGGER.error("Could not read the Linkart config. Leaving the file and the settings as they are", e);
             return;
         }
@@ -109,25 +105,6 @@ public class LinkartConfiguration {
         out.append('\n');
         comment(out, lines);
         out.append(key).append(" = ").append(value).append('\n');
-    }
-
-    // Flat key = value lines only
-    private static void readToml(Path file, Map<String, String> values) throws IOException {
-        for (String line : Files.readAllLines(file, StandardCharsets.UTF_8)) {
-            int comment = line.indexOf('#');
-            if (comment >= 0) line = line.substring(0, comment);
-
-            int equals = line.indexOf('=');
-            if (equals >= 0) values.put(line.substring(0, equals).trim(), line.substring(equals + 1).trim());
-        }
-    }
-
-    private static void readJson(Path file, Map<String, String> values) throws IOException {
-        try (Reader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
-            for (Map.Entry<String, JsonElement> entry : JsonParser.parseReader(reader).getAsJsonObject().entrySet()) {
-                if (entry.getValue().isJsonPrimitive()) values.put(entry.getKey(), entry.getValue().getAsString());
-            }
-        }
     }
 
     private static int integer(Map<String, String> values, String key, int fallback) {

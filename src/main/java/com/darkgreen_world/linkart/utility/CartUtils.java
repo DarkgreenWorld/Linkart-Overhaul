@@ -106,27 +106,14 @@ public class CartUtils {
             member.linkart$setFollower(i == 0 ? null : carts.get(i - 1));
             // The follower holds the link item
             member.linkart$setLinkItem(last ? ItemStack.EMPTY : linkItems.get(i + 1));
+            // setFollowing clears the facing, so this goes after it
             motion.reverse(facing);
         }
     }
 
     private static final int MAX_CARTS = 1024;
-    // Per-tick travel below which a cart is standing still
-    public static final double REST = 1.0E-3;
-    // Vanilla rider push: HAND_PUSH per tick, only below HAND_SPEED
-    private static final double HAND_SPEED = 0.1;
-    private static final double HAND_PUSH = 0.001;
-    // Carts * (blocks per second)^2 * breakLoadPerCart a train can take: 20 carts at 48 by default
-    private static final double LINK_STRENGTH = 940;
-    // The front cart is obstructed if it keeps less than this share of its speed in a tick
-    private static final double OBSTRUCTED_SHARE = 0.75;
-    // Any other cart is blocked if, told to go at least this fast, it covers less than this share of the way.
-    // An unpowered powered rail takes half, and is no obstacle
-    private static final double BLOCKED_COMMAND = 0.05;
-    private static final double BLOCKED_SHARE = 0.25;
 
-    // Plans a train's tick: its speed (the mean of what each cart's own physics made of last tick's), its direction,
-    // and who follows whom. The front cart in the direction of travel leads, so a train has no fixed head.
+    // Plans a train's tick: its speed, its direction, and who follows whom.
     public static void plan(AbstractMinecart cart) {
         if (cart.linkart$getMotion().plannedThisTick()) return;
         // A crash can break the train: plan again for what is left
@@ -161,8 +148,9 @@ public class CartUtils {
         for (AbstractMinecart member : carts) {
             CartMotion state = member.linkart$getMotion();
 
-            if (!state.leading && !state.staying && Math.abs(state.commanded) > BLOCKED_COMMAND
-                    && Math.abs(state.travelled) < BLOCKED_SHARE * Math.abs(state.commanded)) {
+            // Blocked: moved < 1/4 commanded (inactive rail halves it)
+            if (!state.leading && !state.staying && Math.abs(state.commanded) > 0.05
+                    && Math.abs(state.travelled) < 0.25 * Math.abs(state.commanded)) {
                 if (state.commanded > 0) blockedForward = true;
                 else blockedBackward = true;
             }
@@ -181,14 +169,15 @@ public class CartUtils {
                 if (way != 0) estimate = way * Math.max(way * estimate, Math.min(way * actual, 0));
                 total += estimate;
 
-                if (state.leading && !state.staying && Math.abs(state.commanded) > 0.03 && actual / state.commanded < OBSTRUCTED_SHARE) {
+                if (state.leading && !state.staying && Math.abs(state.commanded) > 0.03 && actual / state.commanded < 0.25) {
                     obstructed = actual;
                     stopped = member;
                     // Train speed can exceed the front cart's limit
                     impact = Math.min(Math.abs(state.commanded - actual), speedLimit(member));
                 }
 
-                if (Math.abs(state.trainSpeed) < HAND_SPEED && Math.abs(actual - state.commanded) > HAND_PUSH / 2
+                // Vanilla lets a rider push by 0.001 a tick, below a speed of 0.1
+                if (Math.abs(state.trainSpeed) < 0.1 && Math.abs(actual - state.commanded) > 0.001 / 2
                         && member.getFirstPassenger() instanceof Player) {
                     handDriven += estimate;
                     hands++;
@@ -216,7 +205,8 @@ public class CartUtils {
         }
 
         // A cart that can't get on holds up the whole train, so that the rest doesn't pull away from it
-        if (speed > 0 && blockedForward || speed < 0 && blockedBackward) speed = 0;
+        boolean held = speed > 0 && blockedForward || speed < 0 && blockedBackward;
+        if (held) speed = 0;
 
         // Vanilla's standstill threshold
         if (!Double.isFinite(speed) || Math.abs(speed) < 1.0E-5) speed = 0;
@@ -226,20 +216,20 @@ public class CartUtils {
         for (int i = 0; i < carts.size(); i++) {
             int ahead = i - direction;
             int trailing = direction > 0 ? carts.size() - 1 - i : i;
-            carts.get(i).linkart$getMotion().assign(ahead >= 0 && ahead < carts.size() ? carts.get(ahead) : null, direction, speed, trailing);
+            carts.get(i).linkart$getMotion().assign(ahead >= 0 && ahead < carts.size() ? carts.get(ahead) : null, direction, speed, trailing, held);
         }
 
         return true;
     }
 
-    // Sheds carts from the back while breakLoadPerCart * carts * speed^2 exceeds LINK_STRENGTH.
+    // Sheds carts from the back while breakLoadPerCart * carts * speed^2 exceeds 940 (20 carts at 48 by default).
     // Returns the first cart let go, or null if the train held.
     public static @Nullable AbstractMinecart strain(AbstractMinecart puller, AbstractMinecart pulled, double speed) {
         double load = LinkartConfiguration.breakLoadPerCart;
         if (load <= 0 || speed <= 0) return null;
 
         double perSecond = speed * 20;
-        double longest = LINK_STRENGTH / (load * perSecond * perSecond);
+        double longest = 940 / (load * perSecond * perSecond);
         // Includes the pulling cart
         int allowed = (int) Math.min(Math.max(longest - 1, 0), MAX_CARTS);
 

@@ -1,4 +1,5 @@
-/*package com.darkgreen_world.linkart.mixin;
+/*
+package com.darkgreen_world.linkart.mixin;
 
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
