@@ -17,7 +17,9 @@ public class LinkartConfiguration {
     public static boolean chunkloading = false;
     public static int chunkloadingRadius = 3;
 
-    // Reads the settings, then rewrites the file with every setting and current comments.
+    private static boolean incomplete;
+
+    // Reads the settings. The file is rewritten when a setting is missing, unreadable or unknown.
     public static void load() {
         Path file = FabricLoader.getInstance().getConfigDir().resolve("linkart.toml");
         Map<String, String> values = new HashMap<>();
@@ -38,12 +40,16 @@ public class LinkartConfiguration {
             return;
         }
 
+        incomplete = false;
         pathfindingDistance = integer(values, "pathfindingDistance", pathfindingDistance);
         collisionDepth = integer(values, "collisionDepth", collisionDepth);
         distance = decimal(values, "distance", distance);
         breakLoadPerCart = decimal(values, "breakLoadPerCart", breakLoadPerCart);
         chunkloading = flag(values, "chunkloading", chunkloading);
         chunkloadingRadius = integer(values, "chunkloadingRadius", chunkloadingRadius);
+
+        // What is left is unknown
+        if (!incomplete && values.isEmpty()) return;
 
         try {
             Files.writeString(file, toml(), StandardCharsets.UTF_8);
@@ -56,18 +62,16 @@ public class LinkartConfiguration {
         StringBuilder out = new StringBuilder();
 
         comment(out,
-                "Linkart settings. Edit, then restart or run /linkart config reload.",
-                "This file is rewritten whenever it is read: values are kept, anything else is not.");
+                "Linkart settings. Edit, then restart or run /linkart config reload.");
 
         setting(out, "pathfindingDistance", pathfindingDistance,
                 "How far out of place, in blocks, a cart may get before its link breaks, and how far apart two carts",
-                "may be when you link them. A safety net for teleports, portals and stuck carts: ordinary running",
-                "never gets near it.",
+                "may be when you link them. A safety net for teleports, portals and stuck carts",
                 "Default 6, recommended 4 to 8.");
 
         setting(out, "collisionDepth", collisionDepth,
-                "How many links away the carts of one train ignore each other: no pushing, no getting in the way.",
-                "Default 4, recommended 2 to 8. Below 2, neighbouring carts shove each other and the train stutters.");
+                "How many links away the carts of one train ignore each other.",
+                "Default 4, recommended 2 to 8.");
 
         setting(out, "distance", distance,
                 "Spacing between the centres of neighbouring carts, in blocks. A minecart is 0.98 long.",
@@ -77,7 +81,6 @@ public class LinkartConfiguration {
                 "How easily trains come apart. A train of N carts holds as long as",
                 "breakLoadPerCart * N * speed * speed stays within 940, with the speed in blocks per second.",
                 "This is tested when a cart rounds a bend, comes down from a flight, or the front cart is stopped dead.",
-                "Going straight never breaks a link. A train that is too long lets go of the extra carts at its back.",
                 "Longest train that gets round a bend whole, by speed:",
                 "             8    16    32    48    64    80",
                 "   0.01    any   367    91    40    22    14",
@@ -86,8 +89,7 @@ public class LinkartConfiguration {
                 "Default 0.02, recommended 0.01 to 0.04. 0 makes links unbreakable.");
 
         setting(out, "chunkloading", chunkloading,
-                "Whether moving trains keep the chunks around them loaded, also after a restart. Takes a train of at",
-                "least three carts, and costs the server every chunk it holds loaded.",
+                "Whether moving trains keep the chunks around them loaded. Takes a train of at least three carts.",
                 "Default false.");
 
         setting(out, "chunkloadingRadius", chunkloadingRadius,
@@ -108,8 +110,11 @@ public class LinkartConfiguration {
     }
 
     private static int integer(Map<String, String> values, String key, int fallback) {
-        String value = values.get(key);
-        if (value == null) return fallback;
+        String value = values.remove(key);
+        if (value == null) {
+            incomplete = true;
+            return fallback;
+        }
 
         try {
             return Integer.parseInt(value);
@@ -119,8 +124,11 @@ public class LinkartConfiguration {
     }
 
     private static double decimal(Map<String, String> values, String key, double fallback) {
-        String value = values.get(key);
-        if (value == null) return fallback;
+        String value = values.remove(key);
+        if (value == null) {
+            incomplete = true;
+            return fallback;
+        }
 
         try {
             double number = Double.parseDouble(value);
@@ -131,8 +139,11 @@ public class LinkartConfiguration {
     }
 
     private static boolean flag(Map<String, String> values, String key, boolean fallback) {
-        String value = values.get(key);
-        if (value == null) return fallback;
+        String value = values.remove(key);
+        if (value == null) {
+            incomplete = true;
+            return fallback;
+        }
         if (value.equals("true")) return true;
         if (value.equals("false")) return false;
         return invalid(key, value, "true or false", fallback);
@@ -140,6 +151,7 @@ public class LinkartConfiguration {
 
     private static <T> T invalid(String key, String value, String expected, T fallback) {
         Linkart.LOGGER.warn("Linkart config: {} = {} is not {}. Using {}", key, value, expected, fallback);
+        incomplete = true;
         return fallback;
     }
 }

@@ -142,6 +142,7 @@ public class CartUtils {
         double impact = 0;
         double handDriven = 0;
         int hands = 0;
+        double shoves = 0;
         boolean blockedForward = false;
         boolean blockedBackward = false;
 
@@ -160,6 +161,8 @@ public class CartUtils {
             Vec3 facing = state.facing != null ? state.facing : towardsFirst(member);
             Vec3 velocity = member.getDeltaMovement().add(state.pushed);
             double actual = facing == null ? 0 : velocity.x * facing.x + velocity.z * facing.z;
+            double shove = facing == null ? 0 : state.pushed.x * facing.x + state.pushed.z * facing.z;
+            shoves += shove;
 
             if (state.mode == CartMotion.Mode.DRIVEN) {
                 // What this cart's physics, and anything pushing it since, made of the speed it was given
@@ -169,8 +172,9 @@ public class CartUtils {
                 if (way != 0) estimate = way * Math.max(way * estimate, Math.min(way * actual, 0));
                 total += estimate;
 
-                if (state.leading && !state.staying && Math.abs(state.commanded) > 0.03 && actual / state.commanded < 0.25) {
-                    obstructed = actual;
+                if (state.leading && !state.staying && Math.abs(state.commanded) > 0.03 && actual / state.commanded < 0.75) {
+                    // Without shoves, which are shared out below
+                    obstructed = actual - shove;
                     stopped = member;
                     // Train speed can exceed the front cart's limit
                     impact = Math.min(Math.abs(state.commanded - actual), speedLimit(member));
@@ -193,8 +197,8 @@ public class CartUtils {
 
         double speed;
         if (!Double.isNaN(obstructed)) {
-            // The train goes no further than its front cart
-            speed = obstructed;
+            // The train goes no further than its front cart, give or take its share of the shoves
+            speed = obstructed + shoves / count;
         } else if (hands > 0) {
             // A rider's push is too small to share out: follow the ridden cart
             speed = handDriven / hands;
