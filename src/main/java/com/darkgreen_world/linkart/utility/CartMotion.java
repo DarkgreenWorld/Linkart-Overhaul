@@ -4,18 +4,12 @@ import net.minecraft.world.entity.vehicle.minecart.AbstractMinecart;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
-/**
- * Per-tick state of a linked cart. Speeds and distances are horizontal and signed: positive is towards the first
- * cart of the chain.
- */
+//Per-tick state of a linked cart.
 public class CartMotion {
 
     public enum Mode {
-        /** Runs on its own velocity. */
         FREE,
-        /** Given a speed. What vanilla makes of it counts towards the train's. */
         DRIVEN,
-        /** Only kept in place. Doesn't count towards the train's speed. */
         SLAVED
     }
 
@@ -35,8 +29,6 @@ public class CartMotion {
     public double trainTravel;
     /** Whether this cart is at the front this tick. */
     public boolean leading;
-    /** Whether a blocked cart is keeping the train from moving this tick. */
-    public boolean held;
     /** How many carts come after this one this tick. */
     public int trailing;
 
@@ -49,8 +41,12 @@ public class CartMotion {
     public double hold;
     /** Whether the cart was only being kept in place this tick. */
     public boolean staying;
+    /** How much further the cart may go this tick, or NaN for no limit. */
+    public double left = Double.NaN;
     /** Quarter turns so far in the bend the cart is in, signed by direction. */
     public double bend;
+    /** The push a furnace minecart's engine gave in its last tick, for its train to share out. */
+    public Vec3 thrust = Vec3.ZERO;
     /** What other entities' shoves have added since the cart's last tick, kept out of its velocity. */
     public Vec3 pushed = Vec3.ZERO;
 
@@ -76,17 +72,17 @@ public class CartMotion {
         clock++;
     }
 
-    public void assign(@Nullable AbstractMinecart ahead, int direction, double trainSpeed, int trailing, boolean held) {
+    public void assign(@Nullable AbstractMinecart ahead, int direction, double trainSpeed, int trailing) {
         this.plannedAt = clock;
         this.ahead = ahead;
         this.leading = ahead == null;
-        this.held = held;
         this.trailing = trailing;
         this.direction = direction;
         this.trainSpeed = trainSpeed;
         this.mode = Mode.FREE;
         this.commanded = 0;
         this.speedCap = 0;
+        this.left = Double.NaN;
         this.pushed = Vec3.ZERO;
     }
 
@@ -103,6 +99,7 @@ public class CartMotion {
         this.startedAirborne = airborne;
         this.staying = false;
         this.recording = true;
+        this.thrust = Vec3.ZERO;
         this.path = 0;
         this.firstDirection = null;
         this.lastDirection = null;
@@ -174,7 +171,9 @@ public class CartMotion {
         this.speedCap = 0;
         this.hold = 0;
         this.staying = false;
+        this.left = Double.NaN;
         this.bend = 0;
+        this.thrust = Vec3.ZERO;
         this.pushed = Vec3.ZERO;
         this.recording = false;
         this.travelled = 0;

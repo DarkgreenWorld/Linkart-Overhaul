@@ -2,8 +2,11 @@ package com.darkgreen_world.linkart.utility;
 
 import com.darkgreen_world.linkart.configuration.LinkartConfiguration;
 import com.darkgreen_world.linkart.mixin.MinecartAccessor;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ItemParticleOption;
@@ -117,7 +120,45 @@ public class CartUtils {
 
     private static final int MAX_CARTS = 1024;
 
-    // Plans a train's tick: its speed, its direction, and who follows whom.
+    // better_minecart_with_furnace's acceleration limit, and where it takes the speed its engine gave, when it is there
+    private static final @Nullable Field MOD_MAX_ACCELERATION;
+    public static final @Nullable Method SET_ENGINE_VELOCITY;
+
+    static {
+        Field field = null;
+        Method method = null;
+        try {
+            if (FabricLoader.getInstance().isModLoaded("better_minecart_with_furnace")) {
+                field = Class.forName("com.darkgreen_world.betterminecartwithfurnace.ModConfig").getField("maxAcceleration");
+                method = Class.forName("com.darkgreen_world.betterminecartwithfurnace.BetterMinecartWithFurnace$Engine")
+                        .getMethod("betterMinecartWithFurnace$setEngineVelocity", Vec3.class);
+            }
+        } catch (ReflectiveOperationException ignored) {
+        }
+        MOD_MAX_ACCELERATION = field;
+        SET_ENGINE_VELOCITY = method;
+    }
+
+    /**
+     * Speed along a furnace minecart's push after a tick of it.
+     *
+     * @param along speed along the push, the rest of the physics done
+     * @param before speed along the push at the start of the tick
+     */
+    public static double driven(double along, double before, double push, int carts, double water) {
+        double limit = LinkartConfiguration.furnaceMaxAcceleration;
+        try {
+            if (MOD_MAX_ACCELERATION != null) limit = MOD_MAX_ACCELERATION.getDouble(null);
+        } catch (IllegalAccessException ignored) {
+        }
+
+        limit *= water;
+        double gain = water * push / (carts * 8);
+        double speed = along + (limit > 0 ? Math.min(gain, Math.max(before - along, 0) + limit) : gain);
+        return speed >= 0 && speed < 0.0101 ? 0.0101 : speed;
+    }
+
+    // Plans a train's tick: its speed , its direction, and who follows whom.
     public static void plan(AbstractMinecart cart) {
         if (cart.linkart$getMotion().plannedThisTick()) return;
         // A crash can break the train: plan again for what is left
@@ -151,8 +192,9 @@ public class CartUtils {
         }
         if (!uncoupled.isEmpty()) {
             for (ServerPlayer player : ((ServerLevel) cart.level()).players()) {
-                if (uncoupled.stream().anyMatch(other -> player.distanceToSqr(other) < 16 * 16)) player.sendOverlayMessage(Component.translatable(
-                        "linkart.message.physics_uncoupled").withStyle(ChatFormatting.YELLOW));
+                if (uncoupled.stream().anyMatch(other -> player.distanceToSqr(other) < 16 * 16)) {
+                    player.sendOverlayMessage(Component.translatable("linkart.message.physics_uncoupled").withStyle(ChatFormatting.YELLOW));
+                }
             }
             return false;
         }
@@ -165,11 +207,16 @@ public class CartUtils {
         double handDriven = 0;
         int hands = 0;
         double shoves = 0;
+        double thrust = 0;
+        double engines = 0;
+        double kept = 0;
         boolean blockedForward = false;
         boolean blockedBackward = false;
 
         for (AbstractMinecart member : carts) {
             CartMotion state = member.linkart$getMotion();
+            // Speed limits as they are
+            state.speedCap = 0;
 
             // Blocked: moved < 1/4 commanded (inactive rail halves it)
             if (!state.leading && !state.staying && Math.abs(state.commanded) > 0.05
@@ -178,9 +225,19 @@ public class CartUtils {
                 else blockedBackward = true;
             }
 
+            Vec3 facing = state.facing != null ? state.facing : towardsFirst(member);
+
+            if (facing != null) {
+                double push = state.thrust.x * facing.x + state.thrust.z * facing.z;
+                if (Math.signum(push) * state.trainSpeed < speedLimit(member)) {
+                    thrust += push;
+                    engines += Math.abs(push);
+                    kept += Math.abs(push) * (member.isInWater() ? 0.1 : 1);
+                }
+            }
+
             if (state.mode == CartMotion.Mode.SLAVED) continue;
 
-            Vec3 facing = state.facing != null ? state.facing : towardsFirst(member);
             Vec3 velocity = member.getDeltaMovement().add(state.pushed);
             double actual = facing == null ? 0 : velocity.x * facing.x + velocity.z * facing.z;
             // Old minecart physics keep up to 2 a tick of speed but move a ridden cart by three quarters of it, and no
@@ -237,7 +294,17 @@ public class CartUtils {
             speed = carts.get(0).linkart$getMotion().trainSpeed;
         }
 
-        // A cart that can't get on holds up the whole train, so that the rest doesn't pull away from it
+        double limit = LinkartConfiguration.trainMaxAcceleration;
+        double most = limit > 0 ? (motion.mode != CartMotion.Mode.FREE ? motion.trainTravel : Math.abs(speed)) + limit : Double.NaN;
+
+        // Furnace minecarts drive the train
+        if (thrust != 0) {
+            double way = Math.signum(thrust);
+            speed = way * driven(way * speed, way * motion.trainSpeed, Math.abs(thrust), carts.size(), kept / engines);
+        }
+        if (Math.abs(speed) > most) speed = Math.copySign(most, speed);
+
+        // A cart that can't get on holds up the whole train
         boolean held = speed > 0 && blockedForward || speed < 0 && blockedBackward;
         if (held) speed = 0;
 
@@ -249,8 +316,9 @@ public class CartUtils {
         for (int i = 0; i < carts.size(); i++) {
             int ahead = i - direction;
             int trailing = direction > 0 ? carts.size() - 1 - i : i;
-            carts.get(i).linkart$getMotion().assign(ahead >= 0 && ahead < carts.size() ? carts.get(ahead) : null, direction, speed, trailing, held);
+            carts.get(i).linkart$getMotion().assign(ahead >= 0 && ahead < carts.size() ? carts.get(ahead) : null, direction, speed, trailing);
         }
+        carts.get(direction > 0 ? 0 : carts.size() - 1).linkart$getMotion().left = most;
 
         return true;
     }

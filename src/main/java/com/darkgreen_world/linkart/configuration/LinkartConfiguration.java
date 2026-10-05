@@ -14,6 +14,8 @@ public class LinkartConfiguration {
     public static int collisionDepth = 4;
     public static double distance = 1.2d;
     public static double breakLoadPerCart = 0.02d;
+    public static double furnaceMaxAcceleration = 0.04d;
+    public static double trainMaxAcceleration = 0d;
     public static boolean chunkloading = false;
     public static int chunkloadingRadius = 3;
 
@@ -48,6 +50,8 @@ public class LinkartConfiguration {
         breakLoadPerCart = decimal(values, "breakLoadPerCart", breakLoadPerCart);
         chunkloading = flag(values, "chunkloading", chunkloading);
         chunkloadingRadius = integer(values, "chunkloadingRadius", chunkloadingRadius);
+        furnaceMaxAcceleration = decimal(values, "furnaceMaxAcceleration", furnaceMaxAcceleration);
+        trainMaxAcceleration = decimal(values, "trainMaxAcceleration", trainMaxAcceleration);
 
         // What is left is unknown
         if (!incomplete && values.isEmpty()) return;
@@ -96,6 +100,15 @@ public class LinkartConfiguration {
         setting(out, "chunkloadingRadius", chunkloadingRadius,
                 "How many chunks around each cart are kept loaded, with chunkloading on.",
                 "Default 3, recommended 2 or 3. Below 2 the train itself stops running.");
+
+        setting(out, "furnaceMaxAcceleration", furnaceMaxAcceleration,
+                "Most a minecart with furnace speeds up in a tick, in blocks per tick. 0 for no limit.",
+                "Not used with better_minecart_with_furnace, whose own maxAcceleration applies instead.",
+                "Default 0.04.");
+
+        setting(out, "trainMaxAcceleration", trainMaxAcceleration,
+                "Most a train or a minecart speeds up in a tick, in blocks per tick, braking is not limited. 0 for no limit.",
+                "Default 0 (off).");
 
         return out.toString();
     }

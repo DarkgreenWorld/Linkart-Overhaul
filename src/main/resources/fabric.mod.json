@@ -20,7 +20,7 @@
   "contact": {
     "sources": "https://github.com/darkgreenworld/Linkart"
   },
-  "license": "MIT",
+  "license": "GPL-V3",
   "icon": "assets/linkart/icon.png",
   "environment": "*",
   "entrypoints": {

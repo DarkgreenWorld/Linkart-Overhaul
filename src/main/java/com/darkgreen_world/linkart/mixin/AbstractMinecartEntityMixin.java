@@ -6,6 +6,9 @@ import com.darkgreen_world.linkart.utility.CartMotion;
 import com.darkgreen_world.linkart.utility.CartUtils;
 import com.darkgreen_world.linkart.utility.CollisionUtils;
 import com.darkgreen_world.linkart.utility.LoadingCarts;
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.UUIDUtil;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
@@ -21,15 +24,12 @@ import net.minecraft.server.level.TicketType;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
-import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.entity.vehicle.minecart.AbstractMinecart;
-import net.minecraft.world.entity.vehicle.minecart.MinecartFurnace;
 import net.minecraft.world.entity.vehicle.minecart.NewMinecartBehavior;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.PoweredRailBlock;
-import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.RailShape;
 import net.minecraft.world.phys.Vec3;
 
 @Mixin({AbstractMinecart.class})
@@ -41,8 +41,8 @@ public abstract class AbstractMinecartEntityMixin extends Entity implements Link
     @Unique private UUID linkart$followerUUID;
     @Unique private ItemStack linkart$itemStack = ItemStack.EMPTY;
     @Unique private final CartMotion linkart$motion = new CartMotion();
-    @Unique private Vec3 linkart$heldPush;
     @Unique private boolean linkart$wasMoving;
+    @Unique private double linkart$speedAlone = Double.NaN;
 
     public AbstractMinecartEntityMixin(EntityType<?> type, Level level) {
         super(type, level);
@@ -56,7 +56,13 @@ public abstract class AbstractMinecartEntityMixin extends Entity implements Link
 
         CartUtils.plan(cast);
         // Not part of a train
-        if (!motion.plannedThisTick()) return;
+        if (!motion.plannedThisTick()) {
+            double limit = LinkartConfiguration.trainMaxAcceleration;
+            if (limit <= 0 || Double.isNaN(linkart$speedAlone)) linkart$speedAlone = limit > 0 ? getDeltaMovement().horizontalDistance() : Double.NaN;
+            motion.left = linkart$speedAlone + limit;
+            return;
+        }
+        linkart$speedAlone = Double.NaN;
 
         linkart$wasMoving = getDeltaMovement().horizontalDistanceSqr() > 0;
         boolean onRails = CartUtils.isOnRails(cast);
@@ -72,22 +78,6 @@ public abstract class AbstractMinecartEntityMixin extends Entity implements Link
                 linkart$follow(cast, motion.ahead);
             } else {
                 linkart$chase(cast, motion.ahead);
-            }
-        }
-
-        // A furnace cart would drive a held train on whatever speed it is given
-        if (motion.held && cast instanceof MinecartFurnace furnace) {
-            if (!FabricLoader.getInstance().isModLoaded("better_minecart_with_furnace")) {
-                linkart$heldPush = furnace.push;
-                furnace.push = Vec3.ZERO;
-            } else {
-                // That mod sets the push to its thrust along the track every tick, whichever way the cart is sent, so
-                // it can be cancelled out. Not while its engine is off: put out, or on an unpowered powered rail
-                BlockState rail = level().getBlockState(cast.getCurrentBlockPosOrRailBelow());
-                boolean braked = rail.is(Blocks.POWERED_RAIL) && !rail.getValue(PoweredRailBlock.POWERED);
-                if (!braked && !entityTags().contains("better_minecart_with_furnace.extinguished")) {
-                    setDeltaMovement(getDeltaMovement().subtract(furnace.push.scale(1 / 0.8)));
-                }
             }
         }
 
@@ -286,12 +276,14 @@ public abstract class AbstractMinecartEntityMixin extends Entity implements Link
         CartMotion motion = this.linkart$motion;
         boolean moved = motion.plannedThisTick() && motion.tickedThisTick();
 
-        if (linkart$heldPush != null) {
-            ((MinecartFurnace) cast).push = linkart$heldPush;
-            linkart$heldPush = null;
-        }
-
         motion.finish(CartUtils.towardsFirst(cast));
+        if (!motion.plannedThisTick() && !Double.isNaN(linkart$speedAlone)) {
+            Vec3 velocity = getDeltaMovement();
+            double speed = velocity.horizontalDistance();
+            double most = linkart$speedAlone + LinkartConfiguration.trainMaxAcceleration;
+            if (speed > most) setDeltaMovement(velocity.x * most / speed, velocity.y, velocity.z * most / speed);
+            linkart$speedAlone = Math.min(speed, most);
+        }
         if (!moved) return;
 
         // Whatever speed a cart that was to stay still has left gets cancelled next tick
@@ -359,6 +351,26 @@ public abstract class AbstractMinecartEntityMixin extends Entity implements Link
         if (linkart$motion.speedCap > cir.getReturnValue() && ((AbstractMinecart) (Object) this).getBehavior() instanceof NewMinecartBehavior) {
             cir.setReturnValue(linkart$motion.speedCap);
         }
+    }
+
+    // for experimental physics
+    @WrapMethod(method = "makeStepAlongTrack")
+    private double linkart$stepWithin(BlockPos pos, RailShape shape, double movementLeft, Operation<Double> original) {
+        CartMotion motion = this.linkart$motion;
+        if (Double.isNaN(motion.left)) return original.call(pos, shape, movementLeft);
+
+        double step = Math.min(movementLeft, motion.left);
+        double rest = original.call(pos, shape, step);
+        motion.left -= step - rest;
+        return rest;
+    }
+
+    // for old minecart physics
+    @WrapMethod(method = "move(Lnet/minecraft/world/entity/MoverType;Lnet/minecraft/world/phys/Vec3;)V")
+    private void linkart$moveWithin(MoverType type, Vec3 delta, Operation<Void> original) {
+        double length = delta.horizontalDistance();
+        boolean old = !(((AbstractMinecart) (Object) this).getBehavior() instanceof NewMinecartBehavior);
+        original.call(type, old && type == MoverType.SELF && length > linkart$motion.left ? delta.scale(linkart$motion.left / length) : delta);
     }
 
     @Inject(at = @At("HEAD"), method = "push(Lnet/minecraft/world/entity/Entity;)V", cancellable = true)

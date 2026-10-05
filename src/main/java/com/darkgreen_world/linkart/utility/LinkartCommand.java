@@ -14,13 +14,14 @@ public class LinkartCommand {
     private static final Supplier<Component> RELOADED = () -> Component.translatable("commands.linkart.config.reload");
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
-        dispatcher.register(Commands.literal("linkart")
-                .then(Commands.literal("config")
-                        .then(Commands.literal("reload")
-                                .executes(context -> {
-                                    LinkartConfiguration.load();
-                                    context.getSource().sendSuccess(RELOADED, true);
-                                    return 1;
-                                }))));
+        dispatcher.register(Commands.literal("linkart").
+                requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
+                        .then(Commands.literal("config")
+                                .then(Commands.literal("reload")
+                                    .executes(context -> {
+                                        LinkartConfiguration.load();
+                                        context.getSource().sendSuccess(RELOADED, true);
+                                        return 1;
+                                    }))));
     }
 }

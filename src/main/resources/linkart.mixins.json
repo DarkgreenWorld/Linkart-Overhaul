@@ -7,7 +7,8 @@
     "AbstractMinecartEntityMixin",
     "EntityMixin",
     "MinecartAccessor",
-    "ServerLevelMixin"
+    "ServerLevelMixin",
+    "MinecartFurnaceMixin"
   ],
   "injectors": {
     "defaultRequire": 1
