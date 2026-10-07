@@ -1,16 +1,17 @@
 
 ![Linkart banner](https://github.com/melontini/Linkart/assets/104443436/f48430ab-c0f5-49c2-ad7e-6ced0f0d8a34)
 
-[![Linkart Modrinth](https://img.shields.io/modrinth/dt/sc4Mu9Zu?label=modrinth)]()
-[![CurseForge](https://cf.way2muchnoise.eu/title/622736.svg)]()
+[![Linkart Modrinth](https://img.shields.io/badge/Linkart%20Overhaul-Modrinth-1bd96a?logo=modrinth&logoColor=bluegreen)]()
+[![CurseForge](https://img.shields.io/badge/Linkart%20Overhaul-CurseForge-f16436?logo=curseforge&logoColor=orange)]()
 [![Linkart GitHub](https://img.shields.io/badge/%E2%80%8B-GitHub-gray?logo=github&logoColor=black&labelColor=white)](https://github.com/DarkgreenWorld/Linkart-Overhaul)
+
 [![Connector](https://raw.githubusercontent.com/Sinytra/.github/main/badges/connector/compacter.svg)](https://modrinth.com/mod/connector)
 
 ## An updated Linkart fork for 26.3+
 
-### Links to linkart Refabricated
-[![Linkart Modrinth](https://img.shields.io/modrinth/dt/sc4Mu9Zu?label=modrinth)](https://modrinth.com/mod/linkart-refabricated) [![Linkart GitHub](https://img.shields.io/badge/%E2%80%8B-GitHub-gray?logo=github&logoColor=black&labelColor=white)](https://github.com/Flatkat/Linkart-Refabricated)
-### Links to the original mod:
+#### Links to linkart Refabricated
+[![Linkart Modrinth](https://img.shields.io/badge/Linkart%20Refabricated-Modrinth-1bd96a?logo=modrinth&logoColor=bluegreen)](https://modrinth.com/mod/linkart-refabricated) [![Linkart GitHub](https://img.shields.io/badge/%E2%80%8B-GitHub-gray?logo=github&logoColor=black&labelColor=white)](https://github.com/Flatkat/Linkart-Refabricated)
+#### Links to the original mod:
 [![Linkart Modrinth](https://img.shields.io/modrinth/dt/sc4Mu9Zu?logo=modrinth&label=modrinth)](https://modrinth.com/mod/linkart) [![Linkart CurseForge](https://cf.way2muchnoise.eu/title/622736.svg)](https://www.curseforge.com/minecraft/mc-mods/linkart-updated) [![Linkart GitHub](https://img.shields.io/badge/%E2%80%8B-GitHub-gray?logo=github&logoColor=black&labelColor=white)](https://github.com/constellation-mc/Linkart)
 
 ### FAQ:
@@ -23,8 +24,7 @@ This fork includes numerous fixes and optimizations to the mod, as follows:
 3. Minecart groups are no longer unidirectional; you can pull or push the entire minecart group from either end. In addition, coupling minecarts no longer requires distinguishing between lead cars and trailing cars.
 4. After enabling the "Minecart Improvements" experimental data pack, minecarts behave well physically after flying off slopes.
 5. A brand-new configuration file with comments. MidlightLib is no longer used at present.
-6. Fixed a bug where chains were consumed when decoupling minecarts.
-7. Fixed bugs in the minecart chunk-loading feature.
+6. Some bugs were fixed.
 
 > How do I link minecarts together?
 
