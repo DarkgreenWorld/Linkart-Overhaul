@@ -1,8 +1,8 @@
 
 ![Linkart banner](https://github.com/melontini/Linkart/assets/104443436/f48430ab-c0f5-49c2-ad7e-6ced0f0d8a34)
 
-[![Linkart Modrinth](https://img.shields.io/badge/Linkart%20Overhaul-Modrinth-1bd96a?logo=modrinth&logoColor=bluegreen)]()
-[![CurseForge](https://img.shields.io/badge/Linkart%20Overhaul-CurseForge-f16436?logo=curseforge&logoColor=orange)]()
+[![Linkart Modrinth](https://img.shields.io/badge/Linkart%20Overhaul-Modrinth-1bd96a?logo=modrinth&logoColor=bluegreen)](https://modrinth.com/mod/linkart-overhaul)
+[![CurseForge](https://img.shields.io/badge/Linkart%20Overhaul-CurseForge-f16436?logo=curseforge&logoColor=orange)](https://www.curseforge.com/minecraft/mc-mods/linkart-overhaul)
 [![Linkart GitHub](https://img.shields.io/badge/%E2%80%8B-GitHub-gray?logo=github&logoColor=black&labelColor=white)](https://github.com/DarkgreenWorld/Linkart-Overhaul)
 
 [![Connector](https://raw.githubusercontent.com/Sinytra/.github/main/badges/connector/compacter.svg)](https://modrinth.com/mod/connector)
